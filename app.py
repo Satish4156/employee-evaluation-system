@@ -33,7 +33,7 @@ tags = [
     "#Issue > Technical > Server > Downtime",
     "#Issue > Healthcare > Billing > Invoice Error",
     "#Issue > Education > Upload > File Missing",
-    "#Issue > Telecom > Network > Slow Internet",
+    "#Issue > Telecom > Network > Slow Internet"
 ]
 
 # =====================================================
@@ -68,15 +68,20 @@ def exam():
 
     employee_id = session['employee_id']
 
-    completed_questions = set(session.get('completed_questions', []))
+    completed_questions = set(
+        session.get('completed_questions', [])
+    )
 
     # =================================================
     # REMAINING QUESTIONS
     # =================================================
 
     remaining_questions = [
+
         q for q in questions
+
         if str(q["task_id"]) not in completed_questions
+
     ]
 
     total_questions = len(questions)
@@ -85,7 +90,9 @@ def exam():
 
     pending_count = total_questions - completed_count
 
-    progress_percent = int((completed_count / total_questions) * 100)
+    progress_percent = int(
+        (completed_count / total_questions) * 100
+    )
 
     # =================================================
     # ALL COMPLETED
@@ -135,17 +142,21 @@ def exam():
                 )
 
             escalation_data = {
+
                 "employee_id": employee_id,
                 "task_id": current_question["task_id"],
                 "question": current_question["scenario"],
                 "status": "Escalated"
+
             }
 
             escalation_df = pd.DataFrame([escalation_data])
 
             if os.path.exists(ESCALATIONS_FILE):
 
-                old_df = pd.read_excel(ESCALATIONS_FILE)
+                old_df = pd.read_excel(
+                    ESCALATIONS_FILE
+                )
 
                 escalation_df = pd.concat(
                     [old_df, escalation_df],
@@ -157,9 +168,13 @@ def exam():
                 index=False
             )
 
-            completed_questions.add(str(current_question["task_id"]))
+            completed_questions.add(
+                str(current_question["task_id"])
+            )
 
-            session['completed_questions'] = list(completed_questions)
+            session['completed_questions'] = list(
+                completed_questions
+            )
 
             return redirect('/exam')
 
@@ -168,11 +183,13 @@ def exam():
         # =============================================
 
         answer_data = {
+
             "employee_id": employee_id,
             "task_id": current_question["task_id"],
             "question": current_question["scenario"],
             "selected_tags": ", ".join(selected_tags),
             "status": "Completed"
+
         }
 
         employee_sheet = pd.DataFrame([answer_data])
@@ -231,9 +248,13 @@ def exam():
         # MARK COMPLETED
         # =============================================
 
-        completed_questions.add(str(current_question["task_id"]))
+        completed_questions.add(
+            str(current_question["task_id"])
+        )
 
-        session['completed_questions'] = list(completed_questions)
+        session['completed_questions'] = list(
+            completed_questions
+        )
 
         return redirect('/exam')
 
