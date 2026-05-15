@@ -65,7 +65,6 @@ def login():
             """
 
         session['employee_id'] = employee_id
-        session['question_index'] = 0
         session['start_time'] = str(datetime.now())
 
         return redirect(url_for('exam'))
@@ -114,63 +113,32 @@ def exam():
         """
 
     # =====================================================
-    # FILTER EMPLOYEE QUESTIONS
+    # LOAD ANSWERS
     # =====================================================
 
-    employee_questions = questions_df[
+    answers_df = load_excel(
 
-        questions_df['EmployeeID']
-        .astype(str)
-        .str.strip()
+        ANSWERS_FILE,
 
-        ==
+        [
+            'EmployeeID',
+            'QuestionID',
+            'Answers',
+            'Status',
+            'Timestamp'
+        ]
 
-        employee_id
-
-    ].reset_index(drop=True)
-
-    if employee_questions.empty:
-
-        return """
-        <h3 style='text-align:center;
-                   margin-top:50px;
-                   color:red;'>
-
-            No Questions Assigned
-
-        </h3>
-        """
-
-    # =====================================================
-    # QUESTION INDEX
-    # =====================================================
-
-    question_index = session.get(
-        'question_index',
-        0
     )
 
     # =====================================================
-    # COMPLETED
+    # GET COMPLETED QUESTION IDS
     # =====================================================
 
-    if question_index >= len(employee_questions):
+    completed_question_ids = []
 
-        answers_df = load_excel(
+    if not answers_df.empty:
 
-            ANSWERS_FILE,
-
-            [
-                'EmployeeID',
-                'QuestionID',
-                'Answers',
-                'Status',
-                'Timestamp'
-            ]
-
-        )
-
-        employee_answers = answers_df[
+        completed_question_ids = answers_df[
 
             answers_df['EmployeeID']
             .astype(str)
@@ -180,18 +148,81 @@ def exam():
 
             employee_id
 
-        ]
+        ]['QuestionID'].astype(str).tolist()
 
-        total_correct = len(
+    # =====================================================
+    # FILTER ONLY PENDING QUESTIONS
+    # =====================================================
 
-            employee_answers[
-                employee_answers['Status'] == 'Correct'
+    employee_questions = questions_df[
+
+        (
+            questions_df['EmployeeID']
+            .astype(str)
+            .str.strip()
+
+            ==
+
+            employee_id
+        )
+
+        &
+
+        (
+            ~questions_df['QuestionID']
+            .astype(str)
+            .isin(completed_question_ids)
+        )
+
+    ].reset_index(drop=True)
+
+    # =====================================================
+    # NO QUESTIONS
+    # =====================================================
+
+    if employee_questions.empty:
+
+        total_answered = len(
+
+            answers_df[
+
+                answers_df['EmployeeID']
+                .astype(str)
+                .str.strip()
+
+                ==
+
+                employee_id
+
             ]
 
         )
 
-        total_questions = len(
-            employee_questions
+        total_correct = len(
+
+            answers_df[
+
+                (
+                    answers_df['EmployeeID']
+                    .astype(str)
+                    .str.strip()
+
+                    ==
+
+                    employee_id
+                )
+
+                &
+
+                (
+                    answers_df['Status']
+                    ==
+
+                    'Correct'
+                )
+
+            ]
+
         )
 
         return render_template(
@@ -200,9 +231,15 @@ def exam():
 
             score=total_correct,
 
-            total=total_questions
+            total=total_answered
 
         )
+
+    # =====================================================
+    # ALWAYS FIRST PENDING QUESTION
+    # =====================================================
+
+    question_index = 0
 
     # =====================================================
     # CURRENT QUESTION
@@ -366,61 +403,74 @@ def exam():
                 status = 'Correct'
 
             # =============================================
-            # LOAD ANSWERS
+            # PREVENT DUPLICATE SAVE
             # =============================================
 
-            answers_df = load_excel(
+            already_exists = answers_df[
 
-                ANSWERS_FILE,
+                (
+                    answers_df['EmployeeID']
+                    .astype(str)
+                    .str.strip()
 
-                [
-                    'EmployeeID',
-                    'QuestionID',
-                    'Answers',
-                    'Status',
-                    'Timestamp'
-                ]
+                    ==
 
-            )
+                    employee_id
+                )
 
-            # =============================================
-            # SAVE ANSWER
-            # =============================================
+                &
 
-            new_row = pd.DataFrame([{
+                (
+                    answers_df['QuestionID']
+                    .astype(str)
 
-                'EmployeeID':
-                employee_id,
+                    ==
 
-                'QuestionID':
-                current_question['QuestionID'],
+                    str(current_question['QuestionID'])
+                )
 
-                'Answers':
-                ', '.join(selected_answers_sorted),
+            ]
 
-                'Status':
-                status,
+            if already_exists.empty:
 
-                'Timestamp':
-                datetime.now()
+                # =========================================
+                # SAVE ANSWER
+                # =========================================
 
-            }])
+                new_row = pd.DataFrame([{
 
-            answers_df = pd.concat(
+                    'EmployeeID':
+                    employee_id,
 
-                [answers_df, new_row],
+                    'QuestionID':
+                    current_question['QuestionID'],
 
-                ignore_index=True
+                    'Answers':
+                    ', '.join(selected_answers_sorted),
 
-            )
+                    'Status':
+                    status,
 
-            answers_df.to_excel(
+                    'Timestamp':
+                    datetime.now()
 
-                ANSWERS_FILE,
+                }])
 
-                index=False
+                answers_df = pd.concat(
 
-            )
+                    [answers_df, new_row],
+
+                    ignore_index=True
+
+                )
+
+                answers_df.to_excel(
+
+                    ANSWERS_FILE,
+
+                    index=False
+
+                )
 
         # =================================================
         # ESCALATION
@@ -459,46 +509,75 @@ def exam():
 
             )
 
-            new_row = pd.DataFrame([{
+            # =============================================
+            # PREVENT DUPLICATE ESCALATION
+            # =============================================
 
-                'EmployeeID':
-                employee_id,
+            already_escalated = escalation_df[
 
-                'QuestionID':
-                current_question['QuestionID'],
+                (
+                    escalation_df['EmployeeID']
+                    .astype(str)
+                    .str.strip()
 
-                'Scenario':
-                current_question['Scenario'],
+                    ==
 
-                'Explanation':
-                explanation,
+                    employee_id
+                )
 
-                'Timestamp':
-                datetime.now()
+                &
 
-            }])
+                (
+                    escalation_df['QuestionID']
+                    .astype(str)
 
-            escalation_df = pd.concat(
+                    ==
 
-                [escalation_df, new_row],
+                    str(current_question['QuestionID'])
+                )
 
-                ignore_index=True
+            ]
 
-            )
+            if already_escalated.empty:
 
-            escalation_df.to_excel(
+                new_row = pd.DataFrame([{
 
-                ESCALATIONS_FILE,
+                    'EmployeeID':
+                    employee_id,
 
-                index=False
+                    'QuestionID':
+                    current_question['QuestionID'],
 
-            )
+                    'Scenario':
+                    current_question['Scenario'],
+
+                    'Explanation':
+                    explanation,
+
+                    'Timestamp':
+                    datetime.now()
+
+                }])
+
+                escalation_df = pd.concat(
+
+                    [escalation_df, new_row],
+
+                    ignore_index=True
+
+                )
+
+                escalation_df.to_excel(
+
+                    ESCALATIONS_FILE,
+
+                    index=False
+
+                )
 
         # =================================================
-        # NEXT QUESTION
+        # LOAD NEXT PENDING QUESTION
         # =================================================
-
-        session['question_index'] += 1
 
         return redirect(url_for('exam'))
 
@@ -506,22 +585,29 @@ def exam():
     # COUNTS
     # =====================================================
 
-    pending_count = (
-        len(employee_questions)
-        - question_index
+    pending_count = len(employee_questions)
+
+    completed_count = len(completed_question_ids)
+
+    total_questions = (
+        pending_count
+        +
+        completed_count
     )
 
-    completed_count = question_index
+    progress_percent = 0
 
-    progress_percent = int(
+    if total_questions > 0:
 
-        (
-            completed_count
-            /
-            len(employee_questions)
-        ) * 100
+        progress_percent = int(
 
-    )
+            (
+                completed_count
+                /
+                total_questions
+            ) * 100
+
+        )
 
     # =====================================================
     # RENDER
@@ -535,9 +621,9 @@ def exam():
 
         tags=tags,
 
-        question_no=question_index + 1,
+        question_no=completed_count + 1,
 
-        total_questions=len(employee_questions),
+        total_questions=total_questions,
 
         pending_count=pending_count,
 
