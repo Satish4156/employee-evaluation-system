@@ -57,7 +57,17 @@ def login():
         session['employee_id'] = employee_id
         session['start_time'] = str(datetime.now())
 
-        return redirect('/exam')
+        return render_template(
+            'exam.html',
+            question=current_question,
+            tags=tags,
+            question_no=completed_count + 1,
+            total_questions=total_questions,
+            pending_count=pending_count,
+            completed_count=completed_count,
+            progress_percent=progress_percent,
+            success_message='Saved Successfully'
+        )
 
     return render_template('login.html')
 
@@ -280,99 +290,51 @@ def exam():
             # SAVE TO EMPLOYEE SHEET
             # =============================================
 
-            if os.path.exists(ANSWERS_FILE):
+            try:
 
-                with pd.ExcelWriter(
-                    ANSWERS_FILE,
-                    engine='openpyxl',
-                    mode='a',
-                    if_sheet_exists='replace'
-                ) as writer:
+                if os.path.exists(ANSWERS_FILE):
 
-                    answers_df.to_excel(
-                        writer,
-                        sheet_name=employee_id,
-                        index=False
-                    )
+                    with pd.ExcelWriter(
+                        ANSWERS_FILE,
+                        engine='openpyxl',
+                        mode='a',
+                        if_sheet_exists='replace'
+                    ) as writer:
 
-            else:
+                        answers_df.to_excel(
+                            writer,
+                            sheet_name=employee_id,
+                            index=False
+                        )
 
-                with pd.ExcelWriter(
-                    ANSWERS_FILE,
-                    engine='openpyxl'
-                ) as writer:
+                else:
 
-                    answers_df.to_excel(
-                        writer,
-                        sheet_name=employee_id,
-                        index=False
-                    )
+                    with pd.ExcelWriter(
+                        ANSWERS_FILE,
+                        engine='openpyxl'
+                    ) as writer:
 
-        # =================================================
-        # ESCALATION
-        # =================================================
+                        answers_df.to_excel(
+                            writer,
+                            sheet_name=employee_id,
+                            index=False
+                        )
 
-        elif action == 'escalate':
+            except Exception as e:
 
-            # =============================================
-            # DO NOT ALLOW ESCALATION IF TAGS SELECTED
-            # =============================================
-
-            if len(selected_answers) > 0:
-
-                return """
+                return f"""
                 <h3 style='text-align:center;
                            margin-top:50px;
                            color:red;'>
-                    Remove Selected Tags Before Escalation
+                    Error Saving Answer : {e}
                 </h3>
                 """
 
-            explanation = request.form.get(
-                'explanation',
-                ''
-            ).strip()
+            # =============================================
+            # LOAD NEXT UNANSWERED QUESTION
+            # =============================================
 
-            if explanation == '':
-
-                return """
-                <h3 style='text-align:center;
-                           margin-top:50px;
-                           color:red;'>
-                    Escalation Explanation Required
-                </h3>
-                """
-
-            escalation_df = load_excel(
-                ESCALATIONS_FILE,
-                [
-                    'EmployeeID',
-                    'QuestionID',
-                    'Scenario',
-                    'Explanation',
-                    'Timestamp'
-                ]
-            )
-
-            new_row = pd.DataFrame([{
-                'EmployeeID': employee_id,
-                'QuestionID': current_question['QuestionID'],
-                'Scenario': current_question['Scenario'],
-                'Explanation': explanation,
-                'Timestamp': datetime.now()
-            }])
-
-            escalation_df = pd.concat(
-                [escalation_df, new_row],
-                ignore_index=True
-            )
-
-            escalation_df.to_excel(
-                ESCALATIONS_FILE,
-                index=False
-            )
-
-        return redirect('/exam')
+            return redirect('/exam')
 
     # =====================================================
     # COUNTS
