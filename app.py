@@ -413,8 +413,8 @@ def exam():
             # =============================================
 
             scenario = str(
-                current_question['Scenario']
-            )
+                current_question.get('Scenario','')
+            ).strip()
 
             # =============================================
             # DUPLICATE CHECK
