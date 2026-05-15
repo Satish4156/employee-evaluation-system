@@ -494,6 +494,8 @@ def exam():
                         EmployeeID,
 
                         QuestionID,
+                               
+                        Scenario,
 
                         Answers,
 
@@ -503,13 +505,15 @@ def exam():
 
                     )
 
-                    VALUES (?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?)
 
                 """, (
 
                     employee_id,
 
                     question_id,
+
+                    scenario,
 
                     ', '.join(selected_answers),
 
@@ -635,38 +639,6 @@ def exam():
 
         progress_percent=progress_percent
 
-    )
-# =========================================================
-# ADMIN ANSWERS
-# =========================================================
-
-@app.route('/admin/answers')
-def admin_answers():
-
-    conn = get_db()
-
-    query = """
-
-        SELECT *
-
-        FROM answers
-
-        ORDER BY id DESC
-
-    """
-
-    answers_df = pd.read_sql_query(
-
-        query,
-
-        conn
-
-    )
-
-    conn.close()
-
-    return answers_df.to_html(
-        index=False
     )
 
 # =========================================================
