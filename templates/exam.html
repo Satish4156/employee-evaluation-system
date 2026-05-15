@@ -1,11 +1,13 @@
-<!-- templates/exam.html -->
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
 
-    <title>Annotation Tool</title>
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Annotation Assessment</title>
 
     <link
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
@@ -21,47 +23,62 @@
 
 <body>
 
-<div class="top-bar">
+<div class="container exam-container">
 
-    <h1>Annotation Tool</h1>
+    <div class="top-title">
 
-    <div>
-        Question {{ question_no }} / {{ total_questions }}
+        Annotation Assessment
+
     </div>
 
-</div>
+    <div class="progress mb-4">
 
-<div class="container">
+        <div
+            class="progress-bar progress-bar-striped progress-bar-animated"
+            role="progressbar"
+            style="width: {{ progress_percent }}%"
+        >
+
+            {{ progress_percent }}%
+
+        </div>
+
+    </div>
 
     <div class="question-box">
 
-        <h2><b>Scenario Review</b></h2>
+        <h2 class="scenario-title">
 
-        <br>
+            Scenario Review
 
-        <div class="row mb-3">
+        </h2>
 
-            <div class="col">
+        <div class="info-row">
+
+            <div class="info-card">
                 <b>Task ID :</b> {{ question.task_id }}
             </div>
 
-            <div class="col">
+            <div class="info-card">
                 <b>Pending :</b> {{ pending_count }}
             </div>
 
-            <div class="col">
+            <div class="info-card">
                 <b>Employee :</b> {{ session.employee_id }}
             </div>
-
         </div>
 
         <div class="scenario-box">
 
-            <b>Question:</b>
+            <div class="question-label">
+                Question:
+            </div>
 
-            <br><br>
+            <div class="scenario-text">
 
-            {{ question.scenario }}
+                {{ question.Scenario }}
+
+            </div>
 
         </div>
 
@@ -92,7 +109,7 @@
                     placeholder="Search tags..."
                 >
 
-                <div class="tag-list">
+                <div class="tags-container">
 
                     {% for tag in tags %}
 
@@ -103,9 +120,13 @@
                             type="checkbox"
                             name="tags"
                             value="{{ tag }}"
+                            id="tag{{ loop.index }}"
                         >
 
-                        <label class="form-check-label">
+                        <label
+                            class="form-check-label"
+                            for="tag{{ loop.index }}"
+                        >
 
                             {{ tag }}
 
@@ -121,23 +142,27 @@
 
             <div class="col-md-4">
 
-                <h4>Actions</h4>
+                <div class="action-box">
 
-                <button
-                    type="submit"
-                    class="btn btn-success w-100 mb-2"
-                >
-                    Save & Next
-                </button>
+                    <h4>Actions</h4>
 
-                <button
-                    type="submit"
-                    name="action"
-                    value="escalate"
-                    class="btn btn-danger w-100"
-                >
-                    Escalate
-                </button>
+                    <button
+                        type="submit"
+                        class="btn btn-success action-btn"
+                    >
+                        Save & Next
+                    </button>
+
+                    <button
+                        type="submit"
+                        name="action"
+                        value="escalate"
+                        class="btn btn-danger action-btn"
+                    >
+                        Escalate
+                    </button>
+
+                </div>
 
             </div>
 
@@ -174,4 +199,5 @@ document.getElementById("searchBox").addEventListener("keyup", function () {
 </script>
 
 </body>
+
 </html>
