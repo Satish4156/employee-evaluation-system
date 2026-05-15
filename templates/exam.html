@@ -1,539 +1,277 @@
-<!DOCTYPE html>
-<html lang="en">
+from flask import Flask, render_template, request, redirect, session
+import pandas as pd
+import os
+import random
 
-<head>
+app = Flask(__name__)
+app.secret_key = "secret123"
 
-    <meta charset="UTF-8">
+# =====================================================
+# FILES
+# =====================================================
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+QUESTIONS_FILE = "questions.xlsx"
+ANSWERS_FILE = "answers.xlsx"
+ESCALATIONS_FILE = "escalations.xlsx"
 
-    <title>Annotation Assessment</title>
+# =====================================================
+# LOAD QUESTIONS
+# =====================================================
 
-    <!-- Bootstrap -->
+questions_df = pd.read_excel(QUESTIONS_FILE)
 
-    <link rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+questions_df = questions_df.fillna("")
 
-    <!-- Font Awesome -->
+questions = questions_df.to_dict(orient="records")
 
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+# =====================================================
+# TAGS
+# =====================================================
 
-    <style>
+tags = [
+    "#Issue > Account > Registration > Account Creation Failure",
+    "#Issue > Banking > Payment > Transaction Failure",
+    "#Issue > Technical > Server > Downtime",
+    "#Issue > Healthcare > Billing > Invoice Error",
+    "#Issue > Education > Upload > File Missing",
+    "#Issue > Telecom > Network > Slow Internet",
+]
 
-        body{
-            background:#f4f6f9;
-            font-family:Arial, sans-serif;
-            padding-top:30px;
+# =====================================================
+# LOGIN
+# =====================================================
+
+@app.route('/', methods=['GET', 'POST'])
+def login():
+
+    if request.method == 'POST':
+
+        employee_id = request.form.get('employee_id')
+
+        if employee_id:
+
+            session['employee_id'] = employee_id
+            session['completed_questions'] = []
+
+            return redirect('/exam')
+
+    return render_template('login.html')
+
+# =====================================================
+# EXAM
+# =====================================================
+
+@app.route('/exam', methods=['GET', 'POST'])
+def exam():
+
+    if 'employee_id' not in session:
+        return redirect('/')
+
+    employee_id = session['employee_id']
+
+    completed_questions = set(session.get('completed_questions', []))
+
+    # =================================================
+    # REMAINING QUESTIONS
+    # =================================================
+
+    remaining_questions = [
+        q for q in questions
+        if str(q["task_id"]) not in completed_questions
+    ]
+
+    total_questions = len(questions)
+
+    completed_count = len(completed_questions)
+
+    pending_count = total_questions - completed_count
+
+    progress_percent = int((completed_count / total_questions) * 100)
+
+    # =================================================
+    # ALL COMPLETED
+    # =================================================
+
+    if not remaining_questions:
+
+        return render_template(
+            'completed.html',
+            employee_id=employee_id
+        )
+
+    # =================================================
+    # CURRENT QUESTION
+    # =================================================
+
+    current_question = remaining_questions[0]
+
+    # =================================================
+    # POST
+    # =================================================
+
+    if request.method == 'POST':
+
+        action = request.form.get('action')
+
+        selected_tags = request.form.getlist('tags')
+
+        # =============================================
+        # ESCALATION VALIDATION
+        # =============================================
+
+        if action == "escalate":
+
+            if len(selected_tags) > 0:
+
+                return render_template(
+                    'exam.html',
+                    question=current_question,
+                    tags=tags,
+                    question_no=completed_count + 1,
+                    total_questions=total_questions,
+                    pending_count=pending_count,
+                    completed_count=completed_count,
+                    progress_percent=progress_percent,
+                    error_message="Remove Selected Tags Before Escalation"
+                )
+
+            escalation_data = {
+                "employee_id": employee_id,
+                "task_id": current_question["task_id"],
+                "question": current_question["scenario"],
+                "status": "Escalated"
+            }
+
+            escalation_df = pd.DataFrame([escalation_data])
+
+            if os.path.exists(ESCALATIONS_FILE):
+
+                old_df = pd.read_excel(ESCALATIONS_FILE)
+
+                escalation_df = pd.concat(
+                    [old_df, escalation_df],
+                    ignore_index=True
+                )
+
+            escalation_df.to_excel(
+                ESCALATIONS_FILE,
+                index=False
+            )
+
+            completed_questions.add(str(current_question["task_id"]))
+
+            session['completed_questions'] = list(completed_questions)
+
+            return redirect('/exam')
+
+        # =============================================
+        # SAVE ANSWER
+        # =============================================
+
+        answer_data = {
+            "employee_id": employee_id,
+            "task_id": current_question["task_id"],
+            "question": current_question["scenario"],
+            "selected_tags": ", ".join(selected_tags),
+            "status": "Completed"
         }
 
-        .exam-container{
-            max-width:1200px;
-            margin:auto;
-        }
-
-        .top-title{
-            font-size:32px;
-            font-weight:700;
-            margin-bottom:25px;
-            color:#111827;
-        }
-
-        .progress{
-            height:10px;
-            border-radius:30px;
-            margin-bottom:30px;
-        }
-
-        .question-card{
-            background:white;
-            border-radius:18px;
-            padding:32px;
-            box-shadow:0 5px 20px rgba(0,0,0,0.08);
-        }
-
-        .question-header{
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-            margin-bottom:25px;
-        }
-
-        .question-number{
-            background:#0d6efd;
-            color:white;
-            padding:10px 20px;
-            border-radius:30px;
-            font-size:14px;
-            font-weight:600;
-        }
-
-        .meta-info{
-            display:flex;
-            gap:15px;
-            flex-wrap:wrap;
-            margin-bottom:25px;
-        }
-
-        .meta-card{
-            background:#eef4ff;
-            color:#1d4ed8;
-            padding:10px 18px;
-            border-radius:12px;
-            font-size:14px;
-            font-weight:600;
-        }
-
-        .scenario-box{
-            background:#f9fafb;
-            padding:24px;
-            border-radius:14px;
-            margin-bottom:30px;
-            border:1px solid #e5e7eb;
-            color:#374151;
-            line-height:1.8;
-        }
-
-        .tag-label{
-            font-size:18px;
-            font-weight:700;
-            margin-bottom:12px;
-            color:#111827;
-        }
-
-        .main-tags-layout{
-            display:flex;
-            gap:25px;
-            flex-wrap:wrap;
-        }
-
-        .left-panel{
-            flex:2;
-            min-width:350px;
-        }
-
-        .right-panel{
-            flex:1;
-            min-width:250px;
-        }
-
-        .search-box{
-            width:100%;
-            padding:14px;
-            border-radius:12px;
-            border:1px solid #d1d5db;
-            margin-bottom:15px;
-            font-size:15px;
-        }
-
-        .tags-container{
-            border:1px solid #d1d5db;
-            border-radius:14px;
-            background:white;
-            max-height:350px;
-            overflow-y:auto;
-            padding:15px;
-        }
-
-        .tag-item{
-            display:block;
-            padding:10px 12px;
-            border-radius:10px;
-            cursor:pointer;
-            margin-bottom:8px;
-            transition:0.2s;
-            border:1px solid #e5e7eb;
-        }
+        employee_sheet = pd.DataFrame([answer_data])
 
-        .tag-item:hover{
-            background:#eef4ff;
-        }
+        try:
 
-        .selected-tags-box{
-            background:#f9fafb;
-            border:1px solid #d1d5db;
-            border-radius:14px;
-            min-height:350px;
-            padding:15px;
-        }
+            if os.path.exists(ANSWERS_FILE):
 
-        .selected-tag{
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-            background:#eef4ff;
-            color:#1d4ed8;
-            padding:10px 14px;
-            border-radius:25px;
-            margin-bottom:10px;
-            font-size:14px;
-            font-weight:600;
-        }
+                with pd.ExcelWriter(
+                    ANSWERS_FILE,
+                    engine="openpyxl",
+                    mode="a",
+                    if_sheet_exists="overlay"
+                ) as writer:
 
-        .remove-btn{
-            background:none;
-            border:none;
-            color:red;
-            font-size:16px;
-            cursor:pointer;
-        }
+                    try:
 
-        .btn-custom{
-            border-radius:12px;
-            padding:11px 24px;
-            font-weight:600;
-        }
+                        existing_df = pd.read_excel(
+                            ANSWERS_FILE,
+                            sheet_name=employee_id
+                        )
 
-        .escalation-box{
-            background:#fff8e6;
-            border:1px solid #ffe08a;
-            padding:22px;
-            border-radius:14px;
-            margin-top:25px;
-        }
+                        updated_df = pd.concat(
+                            [existing_df, employee_sheet],
+                            ignore_index=True
+                        )
 
-        textarea{
-            resize:none;
-            border-radius:12px !important;
-        }
+                    except:
 
-    </style>
+                        updated_df = employee_sheet
 
-</head>
+                    updated_df.to_excel(
+                        writer,
+                        sheet_name=employee_id,
+                        index=False
+                    )
 
-<body>
+            else:
 
-<div class="container exam-container">
+                with pd.ExcelWriter(
+                    ANSWERS_FILE,
+                    engine="openpyxl"
+                ) as writer:
 
-    <div class="top-title">
+                    employee_sheet.to_excel(
+                        writer,
+                        sheet_name=employee_id,
+                        index=False
+                    )
 
-        Annotation Tool
+        except Exception as e:
 
-    </div>
+            return f"Excel Save Error: {e}"
 
-    <div class="progress">
+        # =============================================
+        # MARK COMPLETED
+        # =============================================
 
-        <div class="progress-bar progress-bar-striped progress-bar-animated"
-             role="progressbar"
-             style="width: {{ progress_percent }}%">
+        completed_questions.add(str(current_question["task_id"]))
 
-        </div>
+        session['completed_questions'] = list(completed_questions)
 
-    </div>
+        return redirect('/exam')
 
-    <div class="question-card">
+    # =================================================
+    # GET
+    # =================================================
 
-        <div class="question-header">
+    return render_template(
+        'exam.html',
+        question=current_question,
+        tags=tags,
+        question_no=completed_count + 1,
+        total_questions=total_questions,
+        pending_count=pending_count,
+        completed_count=completed_count,
+        progress_percent=progress_percent
+    )
 
-            <h3 class="mb-0">
+# =====================================================
+# LOGOUT
+# =====================================================
 
-                <i class="fa-solid fa-file-lines"></i>
-                Scenario Review
+@app.route('/logout')
+def logout():
 
-            </h3>
+    session.clear()
 
-            <div class="question-number">
+    return redirect('/')
 
-                Question {{ question_no }} / {{ total_questions }}
+# =====================================================
+# RUN
+# =====================================================
 
-            </div>
+if __name__ == '__main__':
 
-        </div>
-
-        <div class="meta-info">
-
-            <div class="meta-card">
-
-                Task ID :
-                {{ question['QuestionID'] }}
-
-            </div>
-
-            <div class="meta-card">
-
-                Pending :
-                {{ pending_count }}
-
-            </div>
-
-            <div class="meta-card">
-
-                Employee :
-                {{ session['employee_id'] }}
-
-            </div>
-
-        </div>
-
-        <div class="scenario-box">
-
-            {{ question['Scenario'] }}
-
-        </div>
-
-        <form method="POST">
-
-            <div class="tag-label">
-
-                Select Relevant Tags
-
-            </div>
-
-            <div class="main-tags-layout">
-
-                <!-- LEFT -->
-
-                <div class="left-panel">
-
-                    <input
-                        type="text"
-                        id="searchInput"
-                        class="search-box"
-                        placeholder="Search tags...">
-
-                    <div
-                        id="tagsContainer"
-                        class="tags-container">
-
-                        {% for tag in tags %}
-
-                        <label class="tag-item">
-
-                            <input
-                                type="checkbox"
-                                name="answers"
-                                value="{{ tag.strip() }}"
-                                onchange="updateSelectedTags()">
-
-                            {{ tag.strip() }}
-
-                        </label>
-
-                        {% endfor %}
-
-                    </div>
-
-                </div>
-
-                <!-- RIGHT -->
-
-                <div class="right-panel">
-
-                    <div class="selected-tags-box">
-
-                        <h5 class="mb-3">
-
-                            Selected Tags
-
-                        </h5>
-
-                        <div id="selectedTags">
-
-                            <p class="text-muted">
-
-                                No tags selected
-
-                            </p>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-            <div class="d-flex gap-3 mt-4">
-
-                <button
-                    type="submit"
-                    name="action"
-                    value="submit"
-                    class="btn btn-success btn-custom">
-
-                    <i class="fa-solid fa-check"></i>
-                    Submit & Next
-
-                </button>
-
-                <button
-                    type="button"
-                    onclick="toggleEscalation()"
-                    class="btn btn-danger btn-custom">
-
-                    <i class="fa-solid fa-triangle-exclamation"></i>
-                    Escalate
-
-                </button>
-
-            </div>
-
-            <div id="escalationBox"
-                 class="escalation-box"
-                 style="display:none;">
-
-                <label class="form-label fw-bold">
-
-                    Escalation Reason
-
-                </label>
-
-                <textarea
-                    name="explanation"
-                    rows="4"
-                    class="form-control"
-                    placeholder="Enter escalation explanation..."></textarea>
-
-                <button
-                    type="submit"
-                    name="action"
-                    value="escalate"
-                    class="btn btn-warning btn-custom mt-3">
-
-                    <i class="fa-solid fa-paper-plane"></i>
-                    Submit Escalation
-
-                </button>
-
-            </div>
-
-        </form>
-
-    </div>
-
-</div>
-
-<script>
-
-const searchInput = document.getElementById('searchInput');
-
-searchInput.addEventListener('keyup', function() {
-
-    const filter = this.value.toLowerCase();
-
-    const container = document.getElementById('tagsContainer');
-
-    const tags = Array.from(container.getElementsByClassName('tag-item'));
-
-    tags.sort((a, b) => {
-
-        const textA = a.innerText.trim().toLowerCase();
-
-        const textB = b.innerText.trim().toLowerCase();
-
-        const startsA = textA.startsWith(filter);
-        const startsB = textB.startsWith(filter);
-
-        if (startsA && !startsB) return -1;
-        if (!startsA && startsB) return 1;
-
-        return textA.localeCompare(textB);
-
-    });
-
-    tags.forEach(tag => {
-
-        const text = tag.innerText.toLowerCase();
-
-        if (text.includes(filter)) {
-
-            tag.style.display = 'block';
-
-            container.appendChild(tag);
-
-        }
-        else {
-
-            tag.style.display = 'none';
-
-        }
-
-    });
-
-});
-
-function updateSelectedTags(){
-
-    const selectedDiv = document.getElementById('selectedTags');
-
-    const checkedBoxes = document.querySelectorAll(
-        'input[name="answers"]:checked'
-    );
-
-    selectedDiv.innerHTML = '';
-
-    if(checkedBoxes.length === 0){
-
-        selectedDiv.innerHTML =
-            '<p class="text-muted">No tags selected</p>';
-
-        return;
-
-    }
-
-    checkedBoxes.forEach(box => {
-
-        const tag = box.value;
-
-        const div = document.createElement('div');
-
-        div.className = 'selected-tag';
-
-        div.innerHTML = `
-            <span>${tag}</span>
-            <button
-                type="button"
-                class="remove-btn"
-                onclick="removeTag('${tag}')">
-                ❌
-            </button>
-        `;
-
-        selectedDiv.appendChild(div);
-
-    });
-
-}
-
-function removeTag(tagName){
-
-    const boxes = document.querySelectorAll(
-        'input[name="answers"]'
-    );
-
-    boxes.forEach(box => {
-
-        if(box.value === tagName){
-
-            box.checked = false;
-
-        }
-
-    });
-
-    updateSelectedTags();
-
-}
-
-function toggleEscalation(){
-
-    var box = document.getElementById("escalationBox");
-
-    if(box.style.display === "none"){
-
-        box.style.display = "block";
-
-    }
-    else{
-
-        box.style.display = "none";
-
-    }
-
-}
-
-</script>
-
-</body>
-</html>
+    app.run(
+        debug=False,
+        host='0.0.0.0',
+        port=5000
+    )
