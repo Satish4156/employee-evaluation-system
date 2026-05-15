@@ -489,6 +489,7 @@ def exam():
             # =============================================
 
             if already_exists is None:
+                scenario =question.get("Scenario"," ")
 
                 cursor.execute("""
 
