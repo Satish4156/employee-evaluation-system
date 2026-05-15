@@ -1,3 +1,5 @@
+# app.py
+
 from flask import Flask, render_template, request, redirect, session
 import pandas as pd
 import os
@@ -5,28 +7,16 @@ import os
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-# =====================================================
-# FILES
-# =====================================================
-
 QUESTIONS_FILE = "questions.xlsx"
 ANSWERS_FILE = "answers.xlsx"
 ESCALATIONS_FILE = "escalations.xlsx"
 
-# =====================================================
 # LOAD QUESTIONS
-# =====================================================
-
 questions_df = pd.read_excel(QUESTIONS_FILE)
-
 questions_df = questions_df.fillna("")
-
 questions = questions_df.to_dict(orient="records")
 
-# =====================================================
 # TAGS
-# =====================================================
-
 tags = [
     "#Issue > Account > Registration > Account Creation Failure",
     "#Issue > Banking > Payment > Transaction Failure",
@@ -36,10 +26,7 @@ tags = [
     "#Issue > Telecom > Network > Slow Internet"
 ]
 
-# =====================================================
 # LOGIN
-# =====================================================
-
 @app.route('/', methods=['GET', 'POST'])
 def login():
 
@@ -56,10 +43,7 @@ def login():
 
     return render_template('login.html')
 
-# =====================================================
 # EXAM
-# =====================================================
-
 @app.route('/exam', methods=['GET', 'POST'])
 def exam():
 
@@ -72,17 +56,15 @@ def exam():
         session.get('completed_questions', [])
     )
 
-    # =================================================
-    # REMAINING QUESTIONS
-    # =================================================
+    remaining_questions = []
 
-    remaining_questions = [
+    for q in questions:
 
-        q for q in questions
+        task_id = str(q.get("task_id", ""))
 
-        if str(q["task_id"]) not in completed_questions
+        if task_id not in completed_questions:
 
-    ]
+            remaining_questions.append(q)
 
     total_questions = len(questions)
 
@@ -94,37 +76,24 @@ def exam():
         (completed_count / total_questions) * 100
     )
 
-    # =================================================
     # ALL COMPLETED
-    # =================================================
-
-    if not remaining_questions:
+    if len(remaining_questions) == 0:
 
         return render_template(
             'completed.html',
             employee_id=employee_id
         )
 
-    # =================================================
-    # CURRENT QUESTION
-    # =================================================
-
     current_question = remaining_questions[0]
 
-    # =================================================
     # POST
-    # =================================================
-
     if request.method == 'POST':
 
         action = request.form.get('action')
 
         selected_tags = request.form.getlist('tags')
 
-        # =============================================
         # ESCALATION
-        # =============================================
-
         if action == "escalate":
 
             if len(selected_tags) > 0:
@@ -138,25 +107,21 @@ def exam():
                     pending_count=pending_count,
                     completed_count=completed_count,
                     progress_percent=progress_percent,
-                    error_message="Remove Selected Tags Before Escalation"
+                    error_message="Remove selected tags before escalation"
                 )
 
             escalation_data = {
-
                 "employee_id": employee_id,
                 "task_id": current_question["task_id"],
                 "question": current_question["scenario"],
                 "status": "Escalated"
-
             }
 
             escalation_df = pd.DataFrame([escalation_data])
 
             if os.path.exists(ESCALATIONS_FILE):
 
-                old_df = pd.read_excel(
-                    ESCALATIONS_FILE
-                )
+                old_df = pd.read_excel(ESCALATIONS_FILE)
 
                 escalation_df = pd.concat(
                     [old_df, escalation_df],
@@ -178,18 +143,13 @@ def exam():
 
             return redirect('/exam')
 
-        # =============================================
         # SAVE ANSWER
-        # =============================================
-
         answer_data = {
-
             "employee_id": employee_id,
             "task_id": current_question["task_id"],
             "question": current_question["scenario"],
             "selected_tags": ", ".join(selected_tags),
             "status": "Completed"
-
         }
 
         employee_sheet = pd.DataFrame([answer_data])
@@ -244,10 +204,6 @@ def exam():
 
             return f"Excel Save Error: {e}"
 
-        # =============================================
-        # MARK COMPLETED
-        # =============================================
-
         completed_questions.add(
             str(current_question["task_id"])
         )
@@ -257,10 +213,6 @@ def exam():
         )
 
         return redirect('/exam')
-
-    # =================================================
-    # GET
-    # =================================================
 
     return render_template(
         'exam.html',
@@ -273,10 +225,7 @@ def exam():
         progress_percent=progress_percent
     )
 
-# =====================================================
 # LOGOUT
-# =====================================================
-
 @app.route('/logout')
 def logout():
 
@@ -284,10 +233,7 @@ def logout():
 
     return redirect('/')
 
-# =====================================================
 # RUN
-# =====================================================
-
 if __name__ == '__main__':
 
     app.run(

@@ -1,277 +1,177 @@
-from flask import Flask, render_template, request, redirect, session
-import pandas as pd
-import os
-import random
+<!-- templates/exam.html -->
 
-app = Flask(__name__)
-app.secret_key = "secret123"
+<!DOCTYPE html>
+<html>
 
-# =====================================================
-# FILES
-# =====================================================
+<head>
 
-QUESTIONS_FILE = "questions.xlsx"
-ANSWERS_FILE = "answers.xlsx"
-ESCALATIONS_FILE = "escalations.xlsx"
+    <title>Annotation Tool</title>
 
-# =====================================================
-# LOAD QUESTIONS
-# =====================================================
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
 
-questions_df = pd.read_excel(QUESTIONS_FILE)
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
 
-questions_df = questions_df.fillna("")
+</head>
 
-questions = questions_df.to_dict(orient="records")
+<body>
 
-# =====================================================
-# TAGS
-# =====================================================
+<div class="top-bar">
 
-tags = [
-    "#Issue > Account > Registration > Account Creation Failure",
-    "#Issue > Banking > Payment > Transaction Failure",
-    "#Issue > Technical > Server > Downtime",
-    "#Issue > Healthcare > Billing > Invoice Error",
-    "#Issue > Education > Upload > File Missing",
-    "#Issue > Telecom > Network > Slow Internet",
-]
+    <h1>Annotation Tool</h1>
 
-# =====================================================
-# LOGIN
-# =====================================================
+    <div>
+        Question {{ question_no }} / {{ total_questions }}
+    </div>
 
-@app.route('/', methods=['GET', 'POST'])
-def login():
+</div>
 
-    if request.method == 'POST':
+<div class="container">
 
-        employee_id = request.form.get('employee_id')
+    <div class="question-box">
 
-        if employee_id:
+        <h2><b>Scenario Review</b></h2>
 
-            session['employee_id'] = employee_id
-            session['completed_questions'] = []
+        <br>
 
-            return redirect('/exam')
+        <div class="row mb-3">
 
-    return render_template('login.html')
+            <div class="col">
+                <b>Task ID :</b> {{ question.task_id }}
+            </div>
 
-# =====================================================
-# EXAM
-# =====================================================
+            <div class="col">
+                <b>Pending :</b> {{ pending_count }}
+            </div>
 
-@app.route('/exam', methods=['GET', 'POST'])
-def exam():
+            <div class="col">
+                <b>Employee :</b> {{ session.employee_id }}
+            </div>
 
-    if 'employee_id' not in session:
-        return redirect('/')
+        </div>
 
-    employee_id = session['employee_id']
+        <div class="scenario-box">
 
-    completed_questions = set(session.get('completed_questions', []))
+            <b>Question:</b>
 
-    # =================================================
-    # REMAINING QUESTIONS
-    # =================================================
+            <br><br>
 
-    remaining_questions = [
-        q for q in questions
-        if str(q["task_id"]) not in completed_questions
-    ]
+            {{ question.scenario }}
 
-    total_questions = len(questions)
+        </div>
 
-    completed_count = len(completed_questions)
+    </div>
 
-    pending_count = total_questions - completed_count
+    {% if error_message %}
 
-    progress_percent = int((completed_count / total_questions) * 100)
+    <div class="alert alert-danger">
 
-    # =================================================
-    # ALL COMPLETED
-    # =================================================
+        {{ error_message }}
 
-    if not remaining_questions:
+    </div>
 
-        return render_template(
-            'completed.html',
-            employee_id=employee_id
-        )
+    {% endif %}
 
-    # =================================================
-    # CURRENT QUESTION
-    # =================================================
+    <form method="POST">
 
-    current_question = remaining_questions[0]
+        <div class="row">
 
-    # =================================================
-    # POST
-    # =================================================
+            <div class="col-md-8">
 
-    if request.method == 'POST':
+                <h4>Select Relevant Tags</h4>
 
-        action = request.form.get('action')
+                <input
+                    type="text"
+                    id="searchBox"
+                    class="form-control mb-3"
+                    placeholder="Search tags..."
+                >
 
-        selected_tags = request.form.getlist('tags')
+                <div class="tag-list">
 
-        # =============================================
-        # ESCALATION VALIDATION
-        # =============================================
+                    {% for tag in tags %}
 
-        if action == "escalate":
+                    <div class="form-check tag-item">
 
-            if len(selected_tags) > 0:
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="tags"
+                            value="{{ tag }}"
+                        >
 
-                return render_template(
-                    'exam.html',
-                    question=current_question,
-                    tags=tags,
-                    question_no=completed_count + 1,
-                    total_questions=total_questions,
-                    pending_count=pending_count,
-                    completed_count=completed_count,
-                    progress_percent=progress_percent,
-                    error_message="Remove Selected Tags Before Escalation"
-                )
+                        <label class="form-check-label">
 
-            escalation_data = {
-                "employee_id": employee_id,
-                "task_id": current_question["task_id"],
-                "question": current_question["scenario"],
-                "status": "Escalated"
-            }
+                            {{ tag }}
 
-            escalation_df = pd.DataFrame([escalation_data])
+                        </label>
 
-            if os.path.exists(ESCALATIONS_FILE):
+                    </div>
 
-                old_df = pd.read_excel(ESCALATIONS_FILE)
+                    {% endfor %}
 
-                escalation_df = pd.concat(
-                    [old_df, escalation_df],
-                    ignore_index=True
-                )
+                </div>
 
-            escalation_df.to_excel(
-                ESCALATIONS_FILE,
-                index=False
-            )
+            </div>
 
-            completed_questions.add(str(current_question["task_id"]))
+            <div class="col-md-4">
 
-            session['completed_questions'] = list(completed_questions)
+                <h4>Actions</h4>
 
-            return redirect('/exam')
+                <button
+                    type="submit"
+                    class="btn btn-success w-100 mb-2"
+                >
+                    Save & Next
+                </button>
 
-        # =============================================
-        # SAVE ANSWER
-        # =============================================
+                <button
+                    type="submit"
+                    name="action"
+                    value="escalate"
+                    class="btn btn-danger w-100"
+                >
+                    Escalate
+                </button>
 
-        answer_data = {
-            "employee_id": employee_id,
-            "task_id": current_question["task_id"],
-            "question": current_question["scenario"],
-            "selected_tags": ", ".join(selected_tags),
-            "status": "Completed"
+            </div>
+
+        </div>
+
+    </form>
+
+</div>
+
+<script>
+
+document.getElementById("searchBox").addEventListener("keyup", function () {
+
+    let value = this.value.toLowerCase();
+
+    let items = document.getElementsByClassName("tag-item");
+
+    for (let i = 0; i < items.length; i++) {
+
+        let text = items[i].innerText.toLowerCase();
+
+        if (text.includes(value)) {
+
+            items[i].style.display = "block";
+
+        } else {
+
+            items[i].style.display = "none";
+
         }
+    }
+});
 
-        employee_sheet = pd.DataFrame([answer_data])
+</script>
 
-        try:
-
-            if os.path.exists(ANSWERS_FILE):
-
-                with pd.ExcelWriter(
-                    ANSWERS_FILE,
-                    engine="openpyxl",
-                    mode="a",
-                    if_sheet_exists="overlay"
-                ) as writer:
-
-                    try:
-
-                        existing_df = pd.read_excel(
-                            ANSWERS_FILE,
-                            sheet_name=employee_id
-                        )
-
-                        updated_df = pd.concat(
-                            [existing_df, employee_sheet],
-                            ignore_index=True
-                        )
-
-                    except:
-
-                        updated_df = employee_sheet
-
-                    updated_df.to_excel(
-                        writer,
-                        sheet_name=employee_id,
-                        index=False
-                    )
-
-            else:
-
-                with pd.ExcelWriter(
-                    ANSWERS_FILE,
-                    engine="openpyxl"
-                ) as writer:
-
-                    employee_sheet.to_excel(
-                        writer,
-                        sheet_name=employee_id,
-                        index=False
-                    )
-
-        except Exception as e:
-
-            return f"Excel Save Error: {e}"
-
-        # =============================================
-        # MARK COMPLETED
-        # =============================================
-
-        completed_questions.add(str(current_question["task_id"]))
-
-        session['completed_questions'] = list(completed_questions)
-
-        return redirect('/exam')
-
-    # =================================================
-    # GET
-    # =================================================
-
-    return render_template(
-        'exam.html',
-        question=current_question,
-        tags=tags,
-        question_no=completed_count + 1,
-        total_questions=total_questions,
-        pending_count=pending_count,
-        completed_count=completed_count,
-        progress_percent=progress_percent
-    )
-
-# =====================================================
-# LOGOUT
-# =====================================================
-
-@app.route('/logout')
-def logout():
-
-    session.clear()
-
-    return redirect('/')
-
-# =====================================================
-# RUN
-# =====================================================
-
-if __name__ == '__main__':
-
-    app.run(
-        debug=False,
-        host='0.0.0.0',
-        port=5000
-    )
+</body>
+</html>
