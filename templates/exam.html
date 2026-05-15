@@ -5,232 +5,103 @@
 
     <meta charset="UTF-8">
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
 
-    <title>Annotation Tool</title>
+    <title>Assessment Completed</title>
 
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-    >
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 
-    <link
-        rel="stylesheet"
-        href="{{ url_for('static', filename='style.css') }}"
-    >
+    <style>
+
+        body{
+            background:#f4f6f9;
+            font-family:Arial, sans-serif;
+        }
+
+        .completed-card{
+
+            max-width:600px;
+            margin:100px auto;
+            background:white;
+            padding:40px;
+            border-radius:20px;
+            box-shadow:0 5px 20px rgba(0,0,0,0.08);
+            text-align:center;
+        }
+
+        .success-icon{
+
+            font-size:70px;
+            margin-bottom:20px;
+        }
+
+        .title{
+
+            font-size:34px;
+            font-weight:700;
+            margin-bottom:15px;
+            color:#111827;
+        }
+
+        .score{
+
+            font-size:24px;
+            margin-top:20px;
+            color:#2563eb;
+            font-weight:700;
+        }
+
+        .btn-home{
+
+            margin-top:30px;
+            padding:12px 25px;
+            border-radius:12px;
+            font-weight:600;
+        }
+
+    </style>
 
 </head>
 
 <body>
 
-<div class="top-bar">
+<div class="completed-card">
 
-    <div class="logo-title">
+    <div class="success-icon">
 
-        Annotation Tool
+        ✅
+
+    </div>
+
+    <div class="title">
+
+        Assessment Completed
 
     </div>
 
-    <div class="question-count">
+    <p>
 
-        Question {{ question_no }} / {{ total_questions }}
+        Thank you for completing the annotation assessment.
+
+    </p>
+
+    <div class="score">
+
+        Score :
+        {{ score }} / {{ total }}
 
     </div>
+
+    <a href="/logout"
+       class="btn btn-primary btn-home">
+
+        Logout
+
+    </a>
 
 </div>
-
-<div class="container">
-
-    <div class="question-box">
-
-        <div class="scenario-header">
-
-            <h2>Scenario Review</h2>
-
-        </div>
-
-        <div class="info-row">
-
-            <div class="info-box">
-                Task ID : {{ question.task_id }}
-            </div>
-
-            <div class="info-box">
-                Pending : {{ pending_count }}
-            </div>
-
-            <div class="info-box">
-                Employee : {{ session.employee_id }}
-            </div>
-
-        </div>
-
-        <div class="scenario-content">
-
-            {{ question.Scenario }}
-
-        </div>
-
-    </div>
-
-    {% if error_message %}
-
-    <div class="alert alert-danger">
-
-        {{ error_message }}
-
-    </div>
-
-    {% endif %}
-
-    <form method="POST">
-
-        <div class="row">
-
-            <div class="col-md-8">
-
-                <h3>Select Relevant Tags</h3>
-
-                <input
-                    type="text"
-                    id="searchBox"
-                    class="form-control mb-3"
-                    placeholder="Search tags..."
-                >
-
-                <div class="tags-box">
-
-                    {% for tag in tags %}
-
-                    <div class="form-check tag-item">
-
-                        <input
-                            class="form-check-input"
-                            type="checkbox"
-                            name="tags"
-                            value="{{ tag }}"
-                            id="tag{{ loop.index }}"
-                        >
-
-                        <label
-                            class="form-check-label"
-                            for="tag{{ loop.index }}"
-                        >
-
-                            {{ tag }}
-
-                        </label>
-
-                    </div>
-
-                    {% endfor %}
-
-                </div>
-
-            </div>
-
-            <div class="col-md-4">
-
-                <div class="selected-box">
-
-                    <h3>Selected Tags</h3>
-
-                    <div id="selectedTags">
-
-                        No tags selected
-
-                    </div>
-
-                </div>
-
-                <button
-                    type="submit"
-                    class="btn btn-success action-btn"
-                >
-                    Save & Next
-                </button>
-
-                <button
-                    type="submit"
-                    name="action"
-                    value="escalate"
-                    class="btn btn-danger action-btn"
-                >
-                    Escalate
-                </button>
-
-            </div>
-
-        </div>
-
-    </form>
-
-</div>
-
-<script>
-
-const searchBox = document.getElementById("searchBox");
-
-searchBox.addEventListener("keyup", function () {
-
-    let value = this.value.toLowerCase();
-
-    let items = document.getElementsByClassName("tag-item");
-
-    for (let i = 0; i < items.length; i++) {
-
-        let text = items[i].innerText.toLowerCase();
-
-        if (text.includes(value)) {
-
-            items[i].style.display = "block";
-
-        } else {
-
-            items[i].style.display = "none";
-
-        }
-    }
-});
-
-const checkboxes = document.querySelectorAll(
-    'input[name="tags"]'
-);
-
-const selectedTagsDiv =
-    document.getElementById("selectedTags");
-
-checkboxes.forEach(cb => {
-
-    cb.addEventListener("change", () => {
-
-        let selected = [];
-
-        checkboxes.forEach(c => {
-
-            if (c.checked) {
-
-                selected.push(c.value);
-
-            }
-        });
-
-        if (selected.length === 0) {
-
-            selectedTagsDiv.innerHTML =
-                "No tags selected";
-
-        } else {
-
-            selectedTagsDiv.innerHTML =
-                selected.join("<br><br>");
-
-        }
-    });
-});
-
-</script>
 
 </body>
-
 </html>
