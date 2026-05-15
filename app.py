@@ -80,7 +80,10 @@ def init_db():
         )
 
     """)
-
+    try:
+       cursor.execute("ALTER TABLE answers ADD COLUMN Scenario TEXT")
+    except:
+        pass
     # =====================================================
     # ESCALATIONS TABLE
     # =====================================================
