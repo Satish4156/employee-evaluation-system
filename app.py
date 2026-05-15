@@ -1,5 +1,3 @@
-# app.py
-
 from flask import Flask, render_template, request, redirect, session
 import pandas as pd
 import os
@@ -7,16 +5,28 @@ import os
 app = Flask(__name__)
 app.secret_key = "secret123"
 
+# =====================================================
+# FILES
+# =====================================================
+
 QUESTIONS_FILE = "questions.xlsx"
 ANSWERS_FILE = "answers.xlsx"
 ESCALATIONS_FILE = "escalations.xlsx"
 
+# =====================================================
 # LOAD QUESTIONS
+# =====================================================
+
 questions_df = pd.read_excel(QUESTIONS_FILE)
+
 questions_df = questions_df.fillna("")
+
 questions = questions_df.to_dict(orient="records")
 
+# =====================================================
 # TAGS
+# =====================================================
+
 tags = [
     "#Issue > Account > Registration > Account Creation Failure",
     "#Issue > Banking > Payment > Transaction Failure",
@@ -26,7 +36,10 @@ tags = [
     "#Issue > Telecom > Network > Slow Internet"
 ]
 
+# =====================================================
 # LOGIN
+# =====================================================
+
 @app.route('/', methods=['GET', 'POST'])
 def login():
 
@@ -37,13 +50,15 @@ def login():
         if employee_id:
 
             session['employee_id'] = employee_id
-            session['completed_questions'] = []
 
             return redirect('/exam')
 
     return render_template('login.html')
 
+# =====================================================
 # EXAM
+# =====================================================
+
 @app.route('/exam', methods=['GET', 'POST'])
 def exam():
 
@@ -52,31 +67,87 @@ def exam():
 
     employee_id = session['employee_id']
 
-    completed_questions = set(
-        session.get('completed_questions', [])
-    )
+    # =================================================
+    # LOAD COMPLETED QUESTIONS
+    # =================================================
+
+    completed_questions = set()
+
+    if os.path.exists(ANSWERS_FILE):
+
+        try:
+
+            excel_file = pd.ExcelFile(ANSWERS_FILE)
+
+            if employee_id in excel_file.sheet_names:
+
+                employee_answers = pd.read_excel(
+                    ANSWERS_FILE,
+                    sheet_name=employee_id
+                )
+
+                completed_questions = set(
+                    employee_answers["task_id"].astype(str)
+                )
+
+        except:
+            pass
+
+    # =================================================
+    # FILTER EMPLOYEE QUESTIONS
+    # =================================================
 
     remaining_questions = []
 
     for q in questions:
 
-        task_id = str(q.get("task_id", ""))
+        task_id = str(q.get("task_id", "")).strip()
 
-        if task_id not in completed_questions:
+        assigned_employee = str(
+            q.get("EmployeeID", "")
+        ).strip()
 
-            remaining_questions.append(q)
+        # ONLY EMPLOYEE QUESTIONS
+        if assigned_employee != employee_id:
+            continue
 
-    total_questions = len(questions)
+        # REMOVE COMPLETED QUESTIONS
+        if task_id in completed_questions:
+            continue
+
+        remaining_questions.append(q)
+
+    # =================================================
+    # COUNTS
+    # =================================================
+
+    employee_total_questions = [
+
+        q for q in questions
+
+        if str(q.get("EmployeeID", "")).strip()
+        == employee_id
+
+    ]
+
+    total_questions = len(employee_total_questions)
 
     completed_count = len(completed_questions)
 
     pending_count = total_questions - completed_count
 
-    progress_percent = int(
-        (completed_count / total_questions) * 100
-    )
+    progress_percent = 0
 
+    if total_questions > 0:
+
+        progress_percent = int(
+            (completed_count / total_questions) * 100
+        )
+
+    # =================================================
     # ALL COMPLETED
+    # =================================================
+
     if len(remaining_questions) == 0:
 
         return render_template(
@@ -84,16 +155,26 @@ def exam():
             employee_id=employee_id
         )
 
+    # =================================================
+    # CURRENT QUESTION
+    # =================================================
+
     current_question = remaining_questions[0]
 
+    # =================================================
     # POST
+    # =================================================
+
     if request.method == 'POST':
 
         action = request.form.get('action')
 
         selected_tags = request.form.getlist('tags')
 
-        # ESCALATION
+        # =============================================
+        # ESCALATE
+        # =============================================
+
         if action == "escalate":
 
             if len(selected_tags) > 0:
@@ -111,17 +192,21 @@ def exam():
                 )
 
             escalation_data = {
+
                 "employee_id": employee_id,
                 "task_id": current_question["task_id"],
-                "question": current_question["scenario"],
+                "question": current_question["Scenario"],
                 "status": "Escalated"
+
             }
 
             escalation_df = pd.DataFrame([escalation_data])
 
             if os.path.exists(ESCALATIONS_FILE):
 
-                old_df = pd.read_excel(ESCALATIONS_FILE)
+                old_df = pd.read_excel(
+                    ESCALATIONS_FILE
+                )
 
                 escalation_df = pd.concat(
                     [old_df, escalation_df],
@@ -133,23 +218,20 @@ def exam():
                 index=False
             )
 
-            completed_questions.add(
-                str(current_question["task_id"])
-            )
-
-            session['completed_questions'] = list(
-                completed_questions
-            )
-
             return redirect('/exam')
 
+        # =============================================
         # SAVE ANSWER
+        # =============================================
+
         answer_data = {
+
             "employee_id": employee_id,
             "task_id": current_question["task_id"],
-            "question": current_question["scenario"],
+            "question": current_question["Scenario"],
             "selected_tags": ", ".join(selected_tags),
             "status": "Completed"
+
         }
 
         employee_sheet = pd.DataFrame([answer_data])
@@ -204,28 +286,36 @@ def exam():
 
             return f"Excel Save Error: {e}"
 
-        completed_questions.add(
-            str(current_question["task_id"])
-        )
-
-        session['completed_questions'] = list(
-            completed_questions
-        )
-
         return redirect('/exam')
 
+    # =================================================
+    # GET
+    # =================================================
+
     return render_template(
+
         'exam.html',
+
         question=current_question,
+
         tags=tags,
+
         question_no=completed_count + 1,
+
         total_questions=total_questions,
+
         pending_count=pending_count,
+
         completed_count=completed_count,
+
         progress_percent=progress_percent
+
     )
 
+# =====================================================
 # LOGOUT
+# =====================================================
+
 @app.route('/logout')
 def logout():
 
@@ -233,11 +323,18 @@ def logout():
 
     return redirect('/')
 
+# =====================================================
 # RUN
+# =====================================================
+
 if __name__ == '__main__':
 
     app.run(
+
         debug=False,
+
         host='0.0.0.0',
+
         port=5000
+
     )
