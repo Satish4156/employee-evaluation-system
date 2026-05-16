@@ -148,7 +148,7 @@ def exam():
     global questions_df
 
     # =====================================================
-    # LOAD QUESTIONS ONLY ONCE
+    # LOAD QUESTIONS
     # =====================================================
 
     if questions_df is None:
@@ -173,14 +173,11 @@ def exam():
             .str.strip()
         )
 
-        if 'Scenario' not in questions_df.columns:
-            questions_df['Scenario'] = ''
-
         questions_df = questions_df.sort_values(
             by='EmployeeID'
         )
 
-        print("Questions loaded successfully")
+        print("Questions loaded")
 
     # =====================================================
     # SESSION CHECK
@@ -240,7 +237,7 @@ def exam():
     ]
 
     # =====================================================
-    # COMPLETED PAGE
+    # COMPLETED
     # =====================================================
 
     if employee_questions.empty:
@@ -347,8 +344,6 @@ def exam():
 
             if len(selected_answers) == 0:
 
-                conn.close()
-
                 return """
 
                 <h3 style='text-align:center;
@@ -411,19 +406,15 @@ def exam():
 
             question_id = str(
                 current_question['QuestionID']
+            )
+
+            # =============================================
+            # SCENARIO
+            # =============================================
+
+            scenario = str(
+                current_question.get('Scenario','')
             ).strip()
-
-            # =============================================
-            # SCENARIO FIX
-            # =============================================
-
-            scenario = ''
-
-            if 'Scenario' in current_question.index:
-
-                scenario = str(
-                    current_question['Scenario']
-                ).strip()
 
             # =============================================
             # DUPLICATE CHECK
@@ -449,7 +440,7 @@ def exam():
             already_exists = cursor.fetchone()
 
             # =============================================
-            # SAVE ANSWER
+            # SAVE
             # =============================================
 
             if already_exists is None:
@@ -503,14 +494,6 @@ def exam():
                 ''
             ).strip()
 
-            scenario = ''
-
-            if 'Scenario' in current_question.index:
-
-                scenario = str(
-                    current_question['Scenario']
-                ).strip()
-
             if explanation != '':
 
                 cursor.execute("""
@@ -537,7 +520,7 @@ def exam():
 
                     str(current_question['QuestionID']),
 
-                    scenario,
+                    str(current_question['Scenario']),
 
                     explanation,
 
