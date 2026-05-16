@@ -4,14 +4,12 @@ from datetime import datetime
 import sqlite3
 import secrets
 from wsgiref.simple_server import make_server
-#from waitress import serve
 
 # =========================================================
 # APP
 # =========================================================
 
 app = Flask(__name__)
-
 app.secret_key = secrets.token_hex(16)
 
 # =========================================================
@@ -34,13 +32,9 @@ questions_df = None
 def get_db():
 
     conn = sqlite3.connect(
-
         DATABASE,
-
         check_same_thread=False,
-
         timeout=30
-
     )
 
     conn.row_factory = sqlite3.Row
@@ -70,6 +64,8 @@ def init_db():
             EmployeeID TEXT,
 
             QuestionID TEXT,
+
+            Scenario TEXT,
 
             Answers TEXT,
 
@@ -106,7 +102,6 @@ def init_db():
     """)
 
     conn.commit()
-
     conn.close()
 
 # =========================================================
@@ -119,11 +114,8 @@ def login():
     if request.method == 'POST':
 
         employee_id = request.form.get(
-
             'employee_id',
-
             ''
-
         ).strip()
 
         if employee_id == '':
@@ -156,7 +148,7 @@ def exam():
     global questions_df
 
     # =====================================================
-    # LOAD QUESTIONS ONLY WHEN NEEDED
+    # LOAD QUESTIONS
     # =====================================================
 
     if questions_df is None:
@@ -164,39 +156,25 @@ def exam():
         print("Loading questions...")
 
         questions_df = pd.read_excel(
-
             QUESTIONS_FILE,
-
             dtype=str,
-
             engine='openpyxl'
-
         ).fillna('')
 
         questions_df['EmployeeID'] = (
-
             questions_df['EmployeeID']
-
             .astype(str)
-
             .str.strip()
-
         )
 
         questions_df['QuestionID'] = (
-
             questions_df['QuestionID']
-
             .astype(str)
-
             .str.strip()
-
         )
 
         questions_df = questions_df.sort_values(
-
             by='EmployeeID'
-
         )
 
         print("Questions loaded")
@@ -216,7 +194,6 @@ def exam():
     # =====================================================
 
     conn = get_db()
-
     cursor = conn.cursor()
 
     # =====================================================
@@ -234,11 +211,8 @@ def exam():
     """, (employee_id,))
 
     completed_ids = set(
-
         row['QuestionID']
-
         for row in cursor.fetchall()
-
     )
 
     # =====================================================
@@ -248,29 +222,22 @@ def exam():
     employee_questions = questions_df[
 
         (
-
             questions_df['EmployeeID']
-
             ==
-
             employee_id
-
         )
 
         &
 
         (
-
             ~questions_df['QuestionID']
-
             .isin(completed_ids)
-
         )
 
     ]
 
     # =====================================================
-    # NO QUESTIONS
+    # COMPLETED
     # =====================================================
 
     if employee_questions.empty:
@@ -304,13 +271,9 @@ def exam():
         conn.close()
 
         return render_template(
-
             'completed.html',
-
             score=total_correct,
-
             total=total_answered
-
         )
 
     # =====================================================
@@ -323,11 +286,7 @@ def exam():
     # TAGS
     # =====================================================
 
-    raw_tags = str(
-
-        current_question['Tags']
-
-    )
+    raw_tags = str(current_question['Tags'])
 
     raw_tags = raw_tags.replace('\n', ',')
     raw_tags = raw_tags.replace('|', ',')
@@ -343,11 +302,7 @@ def exam():
 
     ]
 
-    tags = sorted(
-
-        list(dict.fromkeys(tags))
-
-    )
+    tags = sorted(list(dict.fromkeys(tags)))
 
     # =====================================================
     # POST
@@ -363,11 +318,7 @@ def exam():
 
         if action == 'submit':
 
-            selected_answers = request.form.getlist(
-
-                'answers'
-
-            )
+            selected_answers = request.form.getlist('answers')
 
             selected_answers = sorted(
 
@@ -410,9 +361,7 @@ def exam():
             # =============================================
 
             correct_raw = str(
-
                 current_question['CorrectAnswer']
-
             )
 
             correct_raw = correct_raw.replace('\n', ',')
@@ -452,14 +401,24 @@ def exam():
                 status = 'Correct'
 
             # =============================================
-            # DUPLICATE CHECK
+            # QUESTION ID
             # =============================================
 
             question_id = str(
-
                 current_question['QuestionID']
-
             )
+
+            # =============================================
+            # SCENARIO
+            # =============================================
+
+            scenario = str(
+                current_question.get('Scenario','')
+            ).strip()
+
+            # =============================================
+            # DUPLICATE CHECK
+            # =============================================
 
             cursor.execute("""
 
@@ -474,7 +433,6 @@ def exam():
             """, (
 
                 employee_id,
-
                 question_id
 
             ))
@@ -494,7 +452,7 @@ def exam():
                         EmployeeID,
 
                         QuestionID,
-                               
+
                         Scenario,
 
                         Answers,
@@ -532,11 +490,8 @@ def exam():
         elif action == 'escalate':
 
             explanation = request.form.get(
-
                 'explanation',
-
                 ''
-
             ).strip()
 
             if explanation != '':
@@ -588,13 +543,9 @@ def exam():
     completed_count = len(completed_ids)
 
     total_questions = (
-
         pending_count
-
         +
-
         completed_count
-
     )
 
     progress_percent = 0
@@ -604,13 +555,9 @@ def exam():
         progress_percent = int(
 
             (
-
                 completed_count
-
                 /
-
                 total_questions
-
             ) * 100
 
         )
@@ -663,13 +610,9 @@ if __name__ == '__main__':
     print("Server starting...")
 
     server = make_server(
-
         '0.0.0.0',
-
         5000,
-
         app
-
     )
 
     print("Server running on port 5000")
