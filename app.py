@@ -161,6 +161,11 @@ def exam():
             engine='openpyxl'
         ).fillna('')
 
+        questions_df.columns = (
+            questions_df.columns
+            .str.strip()
+        )
+
         questions_df['EmployeeID'] = (
             questions_df['EmployeeID']
             .astype(str)
@@ -173,8 +178,20 @@ def exam():
             .str.strip()
         )
 
+        # =================================================
+        # SCENARIO COLUMN CHECK
+        # =================================================
+
         if 'Scenario' not in questions_df.columns:
+
             questions_df['Scenario'] = ''
+
+        questions_df['Scenario'] = (
+            questions_df['Scenario']
+            .astype(str)
+            .fillna('')
+            .str.strip()
+        )
 
         questions_df = questions_df.sort_values(
             by='EmployeeID'
@@ -220,12 +237,15 @@ def exam():
     """, (employee_id,))
 
     completed_ids = set(
+
         row['QuestionID']
+
         for row in cursor.fetchall()
+
     )
 
     # =====================================================
-    # FAST FILTER QUESTIONS
+    # FILTER QUESTIONS
     # =====================================================
 
     try:
@@ -423,11 +443,15 @@ def exam():
 
             scenario = ''
 
-            if 'Scenario' in current_question.index:
+            try:
 
                 scenario = str(
-                    current_question['Scenario']
+                    current_question.get('Scenario', '')
                 ).strip()
+
+            except:
+
+                scenario = ''
 
             # =============================================
             # DELETE OLD ENTRY
@@ -503,11 +527,15 @@ def exam():
 
             scenario = ''
 
-            if 'Scenario' in current_question.index:
+            try:
 
                 scenario = str(
-                    current_question['Scenario']
+                    current_question.get('Scenario', '')
                 ).strip()
+
+            except:
+
+                scenario = ''
 
             if explanation != '':
 
