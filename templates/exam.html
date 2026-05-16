@@ -93,6 +93,7 @@
             border:1px solid #e5e7eb;
             color:#374151;
             line-height:1.8;
+            white-space:pre-wrap;
         }
 
         .tag-label{
@@ -216,7 +217,7 @@
 
         <div class="progress-bar progress-bar-striped progress-bar-animated"
              role="progressbar"
-             style="width: {{ progress_percent }}%">
+             data-width="{{ progress_percent }}">
 
         </div>
 
@@ -405,6 +406,16 @@
 </div>
 
 <script>
+
+document.addEventListener("DOMContentLoaded", function(){
+
+    const progressBar = document.querySelector('.progress-bar');
+
+    const width = progressBar.getAttribute('data-width');
+
+    progressBar.style.width = width + "%";
+
+});
 
 const searchInput = document.getElementById('searchInput');
 

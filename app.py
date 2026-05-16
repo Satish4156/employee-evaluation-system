@@ -178,6 +178,12 @@ def exam():
 
         questions_df = questions_df.sort_values(
             by='EmployeeID'
+        ).reset_index(drop=True)
+
+        questions_df.set_index(
+            'EmployeeID',
+            inplace=True,
+            drop=False
         )
 
         print("Questions loaded successfully")
@@ -219,25 +225,23 @@ def exam():
     )
 
     # =====================================================
-    # FILTER QUESTIONS
+    # FAST FILTER QUESTIONS
     # =====================================================
 
-    employee_questions = questions_df[
+    try:
 
-        (
-            questions_df['EmployeeID']
-            ==
-            employee_id
-        )
+        employee_questions = questions_df.loc[[employee_id]]
 
-        &
+    except:
 
-        (
-            ~questions_df['QuestionID']
+        employee_questions = pd.DataFrame()
+
+    if not employee_questions.empty:
+
+        employee_questions = employee_questions[
+            ~employee_questions['QuestionID']
             .isin(completed_ids)
-        )
-
-    ]
+        ]
 
     # =====================================================
     # COMPLETED PAGE
@@ -414,7 +418,7 @@ def exam():
             ).strip()
 
             # =============================================
-            # SCENARIO FIX
+            # SCENARIO
             # =============================================
 
             scenario = ''
@@ -426,14 +430,12 @@ def exam():
                 ).strip()
 
             # =============================================
-            # DUPLICATE CHECK
+            # DELETE OLD ENTRY
             # =============================================
 
             cursor.execute("""
 
-                SELECT id
-
-                FROM answers
+                DELETE FROM answers
 
                 WHERE EmployeeID = ?
 
@@ -446,51 +448,47 @@ def exam():
 
             ))
 
-            already_exists = cursor.fetchone()
-
             # =============================================
             # SAVE ANSWER
             # =============================================
 
-            if already_exists is None:
+            cursor.execute("""
 
-                cursor.execute("""
+                INSERT INTO answers (
 
-                    INSERT INTO answers (
+                    EmployeeID,
 
-                        EmployeeID,
+                    QuestionID,
 
-                        QuestionID,
+                    Scenario,
 
-                        Scenario,
+                    Answers,
 
-                        Answers,
+                    Status,
 
-                        Status,
+                    Timestamp
 
-                        Timestamp
+                )
 
-                    )
+                VALUES (?, ?, ?, ?, ?, ?)
 
-                    VALUES (?, ?, ?, ?, ?, ?)
+            """, (
 
-                """, (
+                employee_id,
 
-                    employee_id,
+                question_id,
 
-                    question_id,
+                scenario,
 
-                    scenario,
+                ', '.join(selected_answers),
 
-                    ', '.join(selected_answers),
+                status,
 
-                    status,
+                str(datetime.now())
 
-                    str(datetime.now())
+            ))
 
-                ))
-
-                conn.commit()
+            conn.commit()
 
         # =================================================
         # ESCALATE
