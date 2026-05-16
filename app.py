@@ -51,10 +51,6 @@ def init_db():
 
     cursor = conn.cursor()
 
-    # =====================================================
-    # ANSWERS TABLE
-    # =====================================================
-
     cursor.execute("""
 
         CREATE TABLE IF NOT EXISTS answers (
@@ -76,10 +72,6 @@ def init_db():
         )
 
     """)
-
-    # =====================================================
-    # ESCALATIONS TABLE
-    # =====================================================
 
     cursor.execute("""
 
@@ -153,13 +145,32 @@ def exam():
 
     if questions_df is None:
 
-        print("Loading questions...")
-
         questions_df = pd.read_excel(
             QUESTIONS_FILE,
             dtype=str,
             engine='openpyxl'
         ).fillna('')
+
+        questions_df.columns = (
+            questions_df.columns
+            .str.strip()
+        )
+
+        required_columns = [
+
+            'EmployeeID',
+            'QuestionID',
+            'Scenario',
+            'Tags',
+            'CorrectAnswer'
+
+        ]
+
+        for col in required_columns:
+
+            if col not in questions_df.columns:
+
+                questions_df[col] = ''
 
         questions_df['EmployeeID'] = (
             questions_df['EmployeeID']
@@ -173,11 +184,11 @@ def exam():
             .str.strip()
         )
 
-        questions_df = questions_df.sort_values(
-            by='EmployeeID'
+        questions_df['Scenario'] = (
+            questions_df['Scenario']
+            .astype(str)
+            .str.strip()
         )
-
-        print("Questions loaded")
 
     # =====================================================
     # SESSION CHECK
@@ -189,15 +200,11 @@ def exam():
 
     employee_id = session['employee_id']
 
-    # =====================================================
-    # DATABASE
-    # =====================================================
-
     conn = get_db()
     cursor = conn.cursor()
 
     # =====================================================
-    # COMPLETED QUESTIONS
+    # COMPLETED IDS
     # =====================================================
 
     cursor.execute("""
@@ -211,8 +218,11 @@ def exam():
     """, (employee_id,))
 
     completed_ids = set(
+
         row['QuestionID']
+
         for row in cursor.fetchall()
+
     )
 
     # =====================================================
@@ -237,7 +247,7 @@ def exam():
     ]
 
     # =====================================================
-    # COMPLETED
+    # COMPLETED PAGE
     # =====================================================
 
     if employee_questions.empty:
@@ -344,6 +354,8 @@ def exam():
 
             if len(selected_answers) == 0:
 
+                conn.close()
+
                 return """
 
                 <h3 style='text-align:center;
@@ -406,25 +418,27 @@ def exam():
 
             question_id = str(
                 current_question['QuestionID']
-            )
+            ).strip()
 
             # =============================================
             # SCENARIO
             # =============================================
 
-            scenario = str(
-                current_question.get('Scenario','')
-            ).strip()
+            scenario = ''
+
+            if 'Scenario' in current_question.index:
+
+                scenario = str(
+                    current_question['Scenario']
+                ).strip()
 
             # =============================================
-            # DUPLICATE CHECK
+            # DELETE OLD ENTRY
             # =============================================
 
             cursor.execute("""
 
-                SELECT id
-
-                FROM answers
+                DELETE FROM answers
 
                 WHERE EmployeeID = ?
 
@@ -437,51 +451,47 @@ def exam():
 
             ))
 
-            already_exists = cursor.fetchone()
-
             # =============================================
-            # SAVE
+            # SAVE ANSWER
             # =============================================
 
-            if already_exists is None:
+            cursor.execute("""
 
-                cursor.execute("""
+                INSERT INTO answers (
 
-                    INSERT INTO answers (
+                    EmployeeID,
 
-                        EmployeeID,
+                    QuestionID,
 
-                        QuestionID,
+                    Scenario,
 
-                        Scenario,
+                    Answers,
 
-                        Answers,
+                    Status,
 
-                        Status,
+                    Timestamp
 
-                        Timestamp
+                )
 
-                    )
+                VALUES (?, ?, ?, ?, ?, ?)
 
-                    VALUES (?, ?, ?, ?, ?, ?)
+            """, (
 
-                """, (
+                employee_id,
 
-                    employee_id,
+                question_id,
 
-                    question_id,
+                scenario,
 
-                    scenario,
+                ', '.join(selected_answers),
 
-                    ', '.join(selected_answers),
+                status,
 
-                    status,
+                str(datetime.now())
 
-                    str(datetime.now())
+            ))
 
-                ))
-
-                conn.commit()
+            conn.commit()
 
         # =================================================
         # ESCALATE
@@ -564,10 +574,6 @@ def exam():
 
     conn.close()
 
-    # =====================================================
-    # RENDER
-    # =====================================================
-
     return render_template(
 
         'exam.html',
@@ -607,14 +613,10 @@ if __name__ == '__main__':
 
     init_db()
 
-    print("Server starting...")
-
     server = make_server(
         '0.0.0.0',
         5000,
         app
     )
-
-    print("Server running on port 5000")
 
     server.serve_forever()
