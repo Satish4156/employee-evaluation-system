@@ -3,7 +3,6 @@ import pandas as pd
 from datetime import datetime
 import sqlite3
 import secrets
-from wsgiref.simple_server import make_server
 
 # =========================================================
 # APP
@@ -20,13 +19,13 @@ QUESTIONS_FILE = 'questions.xlsx'
 DATABASE = 'exam.db'
 
 # =========================================================
-# QUESTIONS CACHE
+# CACHE
 # =========================================================
 
 questions_df = None
 
 # =========================================================
-# DATABASE CONNECTION
+# DATABASE
 # =========================================================
 
 def get_db():
@@ -34,24 +33,15 @@ def get_db():
     conn = sqlite3.connect(
         DATABASE,
         check_same_thread=False,
-        timeout=30,
-        isolation_level=None
+        timeout=30
     )
 
     conn.row_factory = sqlite3.Row
 
-    conn.execute("PRAGMA journal_mode=WAL")
-
-    conn.execute("PRAGMA synchronous=NORMAL")
-
-    conn.execute("PRAGMA temp_store=MEMORY")
-
-    conn.execute("PRAGMA cache_size=10000")
-
     return conn
 
 # =========================================================
-# CREATE DATABASE
+# INIT DATABASE
 # =========================================================
 
 def init_db():
@@ -59,10 +49,6 @@ def init_db():
     conn = get_db()
 
     cursor = conn.cursor()
-
-    # =====================================================
-    # ANSWERS TABLE
-    # =====================================================
 
     cursor.execute("""
 
@@ -85,10 +71,6 @@ def init_db():
         )
 
     """)
-
-    # =====================================================
-    # ESCALATIONS TABLE
-    # =====================================================
 
     cursor.execute("""
 
@@ -113,6 +95,63 @@ def init_db():
     conn.commit()
 
     conn.close()
+
+# =========================================================
+# LOAD QUESTIONS
+# =========================================================
+
+def load_questions():
+
+    global questions_df
+
+    if questions_df is None:
+
+        questions_df = pd.read_excel(
+            QUESTIONS_FILE,
+            dtype=str,
+            engine='openpyxl'
+        ).fillna('')
+
+        questions_df.columns = (
+            questions_df.columns
+            .str.strip()
+        )
+
+        # SAFE COLUMNS
+
+        required_columns = [
+
+            'EmployeeID',
+            'QuestionID',
+            'Scenario',
+            'Tags',
+            'CorrectAnswer'
+
+        ]
+
+        for col in required_columns:
+
+            if col not in questions_df.columns:
+
+                questions_df[col] = ''
+
+        questions_df['EmployeeID'] = (
+            questions_df['EmployeeID']
+            .astype(str)
+            .str.strip()
+        )
+
+        questions_df['QuestionID'] = (
+            questions_df['QuestionID']
+            .astype(str)
+            .str.strip()
+        )
+
+        questions_df['Scenario'] = (
+            questions_df['Scenario']
+            .astype(str)
+            .str.strip()
+        )
 
 # =========================================================
 # LOGIN
@@ -155,65 +194,7 @@ def login():
 @app.route('/exam', methods=['GET', 'POST'])
 def exam():
 
-    global questions_df
-
-    # =====================================================
-    # LOAD QUESTIONS ONLY ONCE
-    # =====================================================
-
-    if questions_df is None:
-
-        print("Loading questions...")
-
-        questions_df = pd.read_excel(
-            QUESTIONS_FILE,
-            dtype=str,
-            engine='openpyxl'
-        ).fillna('')
-
-        questions_df.columns = (
-            questions_df.columns
-            .str.strip()
-        )
-
-        questions_df['EmployeeID'] = (
-            questions_df['EmployeeID']
-            .astype(str)
-            .str.strip()
-        )
-
-        questions_df['QuestionID'] = (
-            questions_df['QuestionID']
-            .astype(str)
-            .str.strip()
-        )
-
-        if 'Scenario' not in questions_df.columns:
-
-            questions_df['Scenario'] = ''
-
-        questions_df['Scenario'] = (
-            questions_df['Scenario']
-            .astype(str)
-            .fillna('')
-            .str.strip()
-        )
-
-        questions_df = questions_df.sort_values(
-            by='EmployeeID'
-        ).reset_index(drop=True)
-
-        questions_df.set_index(
-            'EmployeeID',
-            inplace=True,
-            drop=False
-        )
-
-        print("Questions loaded successfully")
-
-    # =====================================================
-    # SESSION CHECK
-    # =====================================================
+    load_questions()
 
     if 'employee_id' not in session:
 
@@ -221,16 +202,12 @@ def exam():
 
     employee_id = session['employee_id']
 
-    # =====================================================
-    # DATABASE
-    # =====================================================
-
     conn = get_db()
 
     cursor = conn.cursor()
 
     # =====================================================
-    # COMPLETED QUESTIONS
+    # COMPLETED IDS
     # =====================================================
 
     cursor.execute("""
@@ -243,32 +220,34 @@ def exam():
 
     """, (employee_id,))
 
-    completed_ids = set(
+    completed_ids = [
 
-        row['QuestionID']
+        str(row['QuestionID'])
 
         for row in cursor.fetchall()
 
-    )
+    ]
 
     # =====================================================
-    # FILTER QUESTIONS
+    # EMPLOYEE QUESTIONS
     # =====================================================
 
-    try:
+    employee_questions = questions_df[
 
-        employee_questions = questions_df.loc[[employee_id]]
+        questions_df['EmployeeID'] == employee_id
 
-    except:
+    ]
 
-        employee_questions = pd.DataFrame()
+    # =====================================================
+    # REMOVE COMPLETED
+    # =====================================================
 
-    if not employee_questions.empty:
+    employee_questions = employee_questions[
 
-        employee_questions = employee_questions[
-            ~employee_questions['QuestionID']
-            .isin(completed_ids)
-        ]
+        ~employee_questions['QuestionID']
+        .isin(completed_ids)
+
+    ]
 
     # =====================================================
     # COMPLETED PAGE
@@ -296,7 +275,7 @@ def exam():
 
             WHERE EmployeeID = ?
 
-            AND Status = 'Correct'
+            AND Status='Correct'
 
         """, (employee_id,))
 
@@ -305,9 +284,13 @@ def exam():
         conn.close()
 
         return render_template(
+
             'completed.html',
+
             score=total_correct,
+
             total=total_answered
+
         )
 
     # =====================================================
@@ -320,7 +303,9 @@ def exam():
     # TAGS
     # =====================================================
 
-    raw_tags = str(current_question['Tags'])
+    raw_tags = str(
+        current_question['Tags']
+    )
 
     raw_tags = raw_tags.replace('\n', ',')
     raw_tags = raw_tags.replace('|', ',')
@@ -328,15 +313,17 @@ def exam():
 
     tags = [
 
-        tag.strip()
+        x.strip()
 
-        for tag in raw_tags.split(',')
+        for x in raw_tags.split(',')
 
-        if tag.strip()
+        if x.strip()
 
     ]
 
-    tags = sorted(list(dict.fromkeys(tags)))
+    tags = list(dict.fromkeys(tags))
+
+    tags.sort()
 
     # =====================================================
     # POST
@@ -352,29 +339,25 @@ def exam():
 
         if action == 'submit':
 
-            selected_answers = request.form.getlist('answers')
-
-            selected_answers = sorted(
-
-                list(
-
-                    dict.fromkeys(
-
-                        [
-
-                            x.strip()
-
-                            for x in selected_answers
-
-                            if x.strip()
-
-                        ]
-
-                    )
-
-                )
-
+            selected_answers = request.form.getlist(
+                'answers'
             )
+
+            selected_answers = [
+
+                x.strip()
+
+                for x in selected_answers
+
+                if x.strip()
+
+            ]
+
+            selected_answers = list(
+                dict.fromkeys(selected_answers)
+            )
+
+            selected_answers.sort()
 
             if len(selected_answers) == 0:
 
@@ -386,7 +369,7 @@ def exam():
                            margin-top:50px;
                            color:red;'>
 
-                    Please Select At Least One Tag
+                    Please Select At Least One Answer
 
                 </h3>
 
@@ -404,27 +387,21 @@ def exam():
             correct_raw = correct_raw.replace('|', ',')
             correct_raw = correct_raw.replace(';', ',')
 
-            correct_answers = sorted(
+            correct_answers = [
 
-                list(
+                x.strip()
 
-                    dict.fromkeys(
+                for x in correct_raw.split(',')
 
-                        [
+                if x.strip()
 
-                            x.strip()
+            ]
 
-                            for x in correct_raw.split(',')
-
-                            if x.strip()
-
-                        ]
-
-                    )
-
-                )
-
+            correct_answers = list(
+                dict.fromkeys(correct_answers)
             )
+
+            correct_answers.sort()
 
             # =============================================
             # STATUS
@@ -448,39 +425,12 @@ def exam():
             # SCENARIO
             # =============================================
 
-            scenario = ''
-
-            try:
-
-                scenario = str(
-                    current_question['Scenario']
-                ).strip()
-
-            except:
-
-                scenario = ''
+            scenario = str(
+                current_question['Scenario']
+            ).strip()
 
             # =============================================
-            # DELETE OLD ENTRY
-            # =============================================
-
-            cursor.execute("""
-
-                DELETE FROM answers
-
-                WHERE EmployeeID = ?
-
-                AND QuestionID = ?
-
-            """, (
-
-                employee_id,
-                question_id
-
-            ))
-
-            # =============================================
-            # SAVE ANSWER
+            # SAVE
             # =============================================
 
             cursor.execute("""
@@ -532,18 +482,6 @@ def exam():
                 ''
             ).strip()
 
-            scenario = ''
-
-            try:
-
-                scenario = str(
-                    current_question['Scenario']
-                ).strip()
-
-            except:
-
-                scenario = ''
-
             if explanation != '':
 
                 cursor.execute("""
@@ -570,7 +508,7 @@ def exam():
 
                     str(current_question['QuestionID']),
 
-                    scenario,
+                    str(current_question['Scenario']),
 
                     explanation,
 
@@ -650,21 +588,19 @@ def logout():
     return redirect(url_for('login'))
 
 # =========================================================
-# START
-# =====================================================
+# MAIN
+# =========================================================
 
 if __name__ == '__main__':
 
     init_db()
 
-    print("Server starting...")
+    app.run(
 
-    server = make_server(
-        '0.0.0.0',
-        5000,
-        app
+        host='0.0.0.0',
+
+        port=5000,
+
+        debug=True
+
     )
-
-    print("Server running on port 5000")
-
-    server.serve_forever()
