@@ -34,10 +34,19 @@ def get_db():
     conn = sqlite3.connect(
         DATABASE,
         check_same_thread=False,
-        timeout=30
+        timeout=30,
+        isolation_level=None
     )
 
     conn.row_factory = sqlite3.Row
+
+    conn.execute("PRAGMA journal_mode=WAL")
+
+    conn.execute("PRAGMA synchronous=NORMAL")
+
+    conn.execute("PRAGMA temp_store=MEMORY")
+
+    conn.execute("PRAGMA cache_size=10000")
 
     return conn
 
@@ -102,6 +111,7 @@ def init_db():
     """)
 
     conn.commit()
+
     conn.close()
 
 # =========================================================
@@ -161,6 +171,11 @@ def exam():
             engine='openpyxl'
         ).fillna('')
 
+        questions_df.columns = (
+            questions_df.columns
+            .str.strip()
+        )
+
         questions_df['EmployeeID'] = (
             questions_df['EmployeeID']
             .astype(str)
@@ -174,10 +189,24 @@ def exam():
         )
 
         if 'Scenario' not in questions_df.columns:
+
             questions_df['Scenario'] = ''
+
+        questions_df['Scenario'] = (
+            questions_df['Scenario']
+            .astype(str)
+            .fillna('')
+            .str.strip()
+        )
 
         questions_df = questions_df.sort_values(
             by='EmployeeID'
+        ).reset_index(drop=True)
+
+        questions_df.set_index(
+            'EmployeeID',
+            inplace=True,
+            drop=False
         )
 
         print("Questions loaded successfully")
@@ -197,6 +226,7 @@ def exam():
     # =====================================================
 
     conn = get_db()
+
     cursor = conn.cursor()
 
     # =====================================================
@@ -214,30 +244,31 @@ def exam():
     """, (employee_id,))
 
     completed_ids = set(
+
         row['QuestionID']
+
         for row in cursor.fetchall()
+
     )
 
     # =====================================================
     # FILTER QUESTIONS
     # =====================================================
 
-    employee_questions = questions_df[
+    try:
 
-        (
-            questions_df['EmployeeID']
-            ==
-            employee_id
-        )
+        employee_questions = questions_df.loc[[employee_id]]
 
-        &
+    except:
 
-        (
-            ~questions_df['QuestionID']
+        employee_questions = pd.DataFrame()
+
+    if not employee_questions.empty:
+
+        employee_questions = employee_questions[
+            ~employee_questions['QuestionID']
             .isin(completed_ids)
-        )
-
-    ]
+        ]
 
     # =====================================================
     # COMPLETED PAGE
@@ -414,26 +445,28 @@ def exam():
             ).strip()
 
             # =============================================
-            # SCENARIO FIX
+            # SCENARIO
             # =============================================
 
             scenario = ''
 
-            if 'Scenario' in current_question.index:
+            try:
 
                 scenario = str(
                     current_question['Scenario']
                 ).strip()
 
+            except:
+
+                scenario = ''
+
             # =============================================
-            # DUPLICATE CHECK
+            # DELETE OLD ENTRY
             # =============================================
 
             cursor.execute("""
 
-                SELECT id
-
-                FROM answers
+                DELETE FROM answers
 
                 WHERE EmployeeID = ?
 
@@ -446,51 +479,47 @@ def exam():
 
             ))
 
-            already_exists = cursor.fetchone()
-
             # =============================================
             # SAVE ANSWER
             # =============================================
 
-            if already_exists is None:
+            cursor.execute("""
 
-                cursor.execute("""
+                INSERT INTO answers (
 
-                    INSERT INTO answers (
+                    EmployeeID,
 
-                        EmployeeID,
+                    QuestionID,
 
-                        QuestionID,
+                    Scenario,
 
-                        Scenario,
+                    Answers,
 
-                        Answers,
+                    Status,
 
-                        Status,
+                    Timestamp
 
-                        Timestamp
+                )
 
-                    )
+                VALUES (?, ?, ?, ?, ?, ?)
 
-                    VALUES (?, ?, ?, ?, ?, ?)
+            """, (
 
-                """, (
+                employee_id,
 
-                    employee_id,
+                question_id,
 
-                    question_id,
+                scenario,
 
-                    scenario,
+                ', '.join(selected_answers),
 
-                    ', '.join(selected_answers),
+                status,
 
-                    status,
+                str(datetime.now())
 
-                    str(datetime.now())
+            ))
 
-                ))
-
-                conn.commit()
+            conn.commit()
 
         # =================================================
         # ESCALATE
@@ -505,11 +534,15 @@ def exam():
 
             scenario = ''
 
-            if 'Scenario' in current_question.index:
+            try:
 
                 scenario = str(
                     current_question['Scenario']
                 ).strip()
+
+            except:
+
+                scenario = ''
 
             if explanation != '':
 
@@ -618,7 +651,7 @@ def logout():
 
 # =========================================================
 # START
-# =========================================================
+# =====================================================
 
 if __name__ == '__main__':
 
