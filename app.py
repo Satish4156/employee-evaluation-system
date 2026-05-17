@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import sqlite3
 import secrets
+import os
 from wsgiref.simple_server import make_server
 
 # =========================================================
@@ -16,8 +17,11 @@ app.secret_key = secrets.token_hex(16)
 # FILES
 # =========================================================
 
-QUESTIONS_FILE = 'questions.xlsx'
-DATABASE = 'exam.db'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+QUESTIONS_FILE = os.path.join(BASE_DIR, 'questions.xlsx')
+
+DATABASE = os.path.join(BASE_DIR, 'exam.db')
 
 # =========================================================
 # QUESTIONS CACHE
@@ -94,7 +98,14 @@ def init_db():
     """)
 
     conn.commit()
+
     conn.close()
+
+# =========================================================
+# INITIALIZE DATABASE
+# =========================================================
+
+init_db()
 
 # =========================================================
 # LOGIN
@@ -145,11 +156,25 @@ def exam():
 
     if questions_df is None:
 
-        questions_df = pd.read_excel(
-            QUESTIONS_FILE,
-            dtype=str,
-            engine='openpyxl'
-        ).fillna('')
+        try:
+
+            questions_df = pd.read_excel(
+                QUESTIONS_FILE,
+                dtype=str,
+                engine='openpyxl'
+            ).fillna('')
+
+        except Exception as e:
+
+            return f"""
+
+            <h2 style='color:red;text-align:center;margin-top:50px;'>
+
+                Excel Loading Error:<br><br>{e}
+
+            </h2>
+
+            """
 
         questions_df.columns = (
             questions_df.columns
@@ -201,6 +226,7 @@ def exam():
     employee_id = session['employee_id']
 
     conn = get_db()
+
     cursor = conn.cursor()
 
     # =====================================================
@@ -352,6 +378,8 @@ def exam():
 
             )
 
+            print("SELECTED ANSWERS:", selected_answers)
+
             if len(selected_answers) == 0:
 
                 conn.close()
@@ -455,43 +483,63 @@ def exam():
             # SAVE ANSWER
             # =============================================
 
-            cursor.execute("""
+            try:
 
-                INSERT INTO answers (
+                cursor.execute("""
 
-                    EmployeeID,
+                    INSERT INTO answers (
 
-                    QuestionID,
+                        EmployeeID,
 
-                    Scenario,
+                        QuestionID,
 
-                    Answers,
+                        Scenario,
 
-                    Status,
+                        Answers,
 
-                    Timestamp
+                        Status,
 
-                )
+                        Timestamp
 
-                VALUES (?, ?, ?, ?, ?, ?)
+                    )
 
-            """, (
+                    VALUES (?, ?, ?, ?, ?, ?)
 
-                employee_id,
+                """, (
 
-                question_id,
+                    employee_id,
 
-                scenario,
+                    question_id,
 
-                ', '.join(selected_answers),
+                    scenario,
 
-                status,
+                    ', '.join(selected_answers),
 
-                str(datetime.now())
+                    status,
 
-            ))
+                    str(datetime.now())
 
-            conn.commit()
+                ))
+
+                conn.commit()
+
+                print("ANSWER SAVED SUCCESSFULLY")
+
+            except Exception as e:
+
+                print("DATABASE ERROR:", e)
+
+                conn.close()
+
+                return f"""
+
+                <h2 style='color:red;text-align:center;margin-top:50px;'>
+
+                    DATABASE ERROR:<br><br>{e}
+
+                </h2>
+
+                """
 
         # =================================================
         # ESCALATE
@@ -506,39 +554,47 @@ def exam():
 
             if explanation != '':
 
-                cursor.execute("""
+                try:
 
-                    INSERT INTO escalations (
+                    cursor.execute("""
 
-                        EmployeeID,
+                        INSERT INTO escalations (
 
-                        QuestionID,
+                            EmployeeID,
 
-                        Scenario,
+                            QuestionID,
 
-                        Explanation,
+                            Scenario,
 
-                        Timestamp
+                            Explanation,
 
-                    )
+                            Timestamp
 
-                    VALUES (?, ?, ?, ?, ?)
+                        )
 
-                """, (
+                        VALUES (?, ?, ?, ?, ?)
 
-                    employee_id,
+                    """, (
 
-                    str(current_question['QuestionID']),
+                        employee_id,
 
-                    str(current_question['Scenario']),
+                        str(current_question['QuestionID']),
 
-                    explanation,
+                        str(current_question['Scenario']),
 
-                    str(datetime.now())
+                        explanation,
 
-                ))
+                        str(datetime.now())
 
-                conn.commit()
+                    ))
+
+                    conn.commit()
+
+                    print("ESCALATION SAVED")
+
+                except Exception as e:
+
+                    print("ESCALATION ERROR:", e)
 
         conn.close()
 
@@ -611,12 +667,12 @@ def logout():
 
 if __name__ == '__main__':
 
-    init_db()
-
     server = make_server(
         '0.0.0.0',
         5000,
         app
     )
+
+    print("SERVER STARTED")
 
     server.serve_forever()
