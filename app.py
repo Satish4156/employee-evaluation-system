@@ -4,6 +4,7 @@ from datetime import datetime
 import sqlite3
 import secrets
 import os
+from wsgiref.simple_server import make_server
 
 # =========================================================
 # APP
@@ -21,8 +22,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 QUESTIONS_FILE = os.path.join(BASE_DIR, 'questions.xlsx')
 
 DATABASE = os.path.join(BASE_DIR, 'exam.db')
-
-print("DATABASE PATH:", DATABASE)
 
 # =========================================================
 # QUESTIONS CACHE
@@ -120,9 +119,7 @@ def login():
         employee_id = request.form.get(
             'employee_id',
             ''
-        ).strip().lower()
-
-        print("LOGIN EMPLOYEE ID:", employee_id)
+        ).strip()
 
         if employee_id == '':
 
@@ -167,8 +164,6 @@ def exam():
                 engine='openpyxl'
             ).fillna('')
 
-            print("QUESTIONS FILE LOADED")
-
         except Exception as e:
 
             return f"""
@@ -206,7 +201,6 @@ def exam():
             questions_df['EmployeeID']
             .astype(str)
             .str.strip()
-            .str.lower()
         )
 
         questions_df['QuestionID'] = (
@@ -221,9 +215,6 @@ def exam():
             .str.strip()
         )
 
-        print("AVAILABLE EMPLOYEE IDS:")
-        print(questions_df['EmployeeID'].unique())
-
     # =====================================================
     # SESSION CHECK
     # =====================================================
@@ -232,13 +223,7 @@ def exam():
 
         return redirect(url_for('login'))
 
-    employee_id = (
-        str(session['employee_id'])
-        .strip()
-        .lower()
-    )
-
-    print("CURRENT EMPLOYEE:", employee_id)
+    employee_id = session['employee_id']
 
     conn = get_db()
 
@@ -266,8 +251,6 @@ def exam():
 
     )
 
-    print("COMPLETED IDS:", completed_ids)
-
     # =====================================================
     # FILTER QUESTIONS
     # =====================================================
@@ -288,8 +271,6 @@ def exam():
         )
 
     ]
-
-    print("TOTAL QUESTIONS FOUND:", len(employee_questions))
 
     # =====================================================
     # COMPLETED PAGE
@@ -337,8 +318,6 @@ def exam():
 
     current_question = employee_questions.iloc[0]
 
-    print("CURRENT QUESTION ID:", current_question['QuestionID'])
-
     # =====================================================
     # TAGS
     # =====================================================
@@ -367,11 +346,7 @@ def exam():
 
     if request.method == 'POST':
 
-        print("FORM DATA:", request.form)
-
         action = request.form.get('action')
-
-        print("ACTION:", action)
 
         # =================================================
         # SUBMIT
@@ -455,8 +430,6 @@ def exam():
 
             )
 
-            print("CORRECT ANSWERS:", correct_answers)
-
             # =============================================
             # STATUS
             # =============================================
@@ -467,8 +440,6 @@ def exam():
 
                 status = 'Correct'
 
-            print("STATUS:", status)
-
             # =============================================
             # QUESTION ID
             # =============================================
@@ -476,8 +447,6 @@ def exam():
             question_id = str(
                 current_question['QuestionID']
             ).strip()
-
-            print("QUESTION ID:", question_id)
 
             # =============================================
             # SCENARIO
@@ -509,8 +478,6 @@ def exam():
                 question_id
 
             ))
-
-            print("OLD ANSWER REMOVED")
 
             # =============================================
             # SAVE ANSWER
@@ -584,8 +551,6 @@ def exam():
                 'explanation',
                 ''
             ).strip()
-
-            print("ESCALATION:", explanation)
 
             if explanation != '':
 
@@ -702,10 +667,12 @@ def logout():
 
 if __name__ == '__main__':
 
+    server = make_server(
+        '0.0.0.0',
+        5000,
+        app
+    )
+
     print("SERVER STARTED")
 
-    app.run(
-        host='0.0.0.0',
-        port=5000,
-        debug=True
-    )
+    server.serve_forever()
