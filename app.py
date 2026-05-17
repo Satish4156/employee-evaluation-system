@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 import sqlite3
 import secrets
-from wsgiref.simple_server import make_server
+import os
 
 # =========================================================
 # APP
@@ -16,8 +16,13 @@ app.secret_key = secrets.token_hex(16)
 # FILES
 # =========================================================
 
-QUESTIONS_FILE = 'questions.xlsx'
-DATABASE = 'exam.db'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+QUESTIONS_FILE = os.path.join(BASE_DIR, 'questions.xlsx')
+
+DATABASE = os.path.join(BASE_DIR, 'exam.db')
+
+print("DATABASE PATH:", DATABASE)
 
 # =========================================================
 # QUESTIONS CACHE
@@ -51,10 +56,6 @@ def init_db():
 
     cursor = conn.cursor()
 
-    # =====================================================
-    # ANSWERS TABLE
-    # =====================================================
-
     cursor.execute("""
 
         CREATE TABLE IF NOT EXISTS answers (
@@ -77,10 +78,6 @@ def init_db():
 
     """)
 
-    # =====================================================
-    # ESCALATIONS TABLE
-    # =====================================================
-
     cursor.execute("""
 
         CREATE TABLE IF NOT EXISTS escalations (
@@ -102,7 +99,14 @@ def init_db():
     """)
 
     conn.commit()
+
     conn.close()
+
+# =========================================================
+# INITIALIZE DATABASE
+# =========================================================
+
+init_db()
 
 # =========================================================
 # LOGIN
@@ -116,7 +120,9 @@ def login():
         employee_id = request.form.get(
             'employee_id',
             ''
-        ).strip()
+        ).strip().lower()
+
+        print("LOGIN EMPLOYEE ID:", employee_id)
 
         if employee_id == '':
 
@@ -153,18 +159,54 @@ def exam():
 
     if questions_df is None:
 
-        print("Loading questions...")
+        try:
 
-        questions_df = pd.read_excel(
-            QUESTIONS_FILE,
-            dtype=str,
-            engine='openpyxl'
-        ).fillna('')
+            questions_df = pd.read_excel(
+                QUESTIONS_FILE,
+                dtype=str,
+                engine='openpyxl'
+            ).fillna('')
+
+            print("QUESTIONS FILE LOADED")
+
+        except Exception as e:
+
+            return f"""
+
+            <h2 style='color:red;text-align:center;margin-top:50px;'>
+
+                Excel Loading Error:<br><br>{e}
+
+            </h2>
+
+            """
+
+        questions_df.columns = (
+            questions_df.columns
+            .str.strip()
+        )
+
+        required_columns = [
+
+            'EmployeeID',
+            'QuestionID',
+            'Scenario',
+            'Tags',
+            'CorrectAnswer'
+
+        ]
+
+        for col in required_columns:
+
+            if col not in questions_df.columns:
+
+                questions_df[col] = ''
 
         questions_df['EmployeeID'] = (
             questions_df['EmployeeID']
             .astype(str)
             .str.strip()
+            .str.lower()
         )
 
         questions_df['QuestionID'] = (
@@ -173,11 +215,14 @@ def exam():
             .str.strip()
         )
 
-        questions_df = questions_df.sort_values(
-            by='EmployeeID'
+        questions_df['Scenario'] = (
+            questions_df['Scenario']
+            .astype(str)
+            .str.strip()
         )
 
-        print("Questions loaded")
+        print("AVAILABLE EMPLOYEE IDS:")
+        print(questions_df['EmployeeID'].unique())
 
     # =====================================================
     # SESSION CHECK
@@ -187,17 +232,20 @@ def exam():
 
         return redirect(url_for('login'))
 
-    employee_id = session['employee_id']
+    employee_id = (
+        str(session['employee_id'])
+        .strip()
+        .lower()
+    )
 
-    # =====================================================
-    # DATABASE
-    # =====================================================
+    print("CURRENT EMPLOYEE:", employee_id)
 
     conn = get_db()
+
     cursor = conn.cursor()
 
     # =====================================================
-    # COMPLETED QUESTIONS
+    # COMPLETED IDS
     # =====================================================
 
     cursor.execute("""
@@ -211,9 +259,14 @@ def exam():
     """, (employee_id,))
 
     completed_ids = set(
+
         row['QuestionID']
+
         for row in cursor.fetchall()
+
     )
+
+    print("COMPLETED IDS:", completed_ids)
 
     # =====================================================
     # FILTER QUESTIONS
@@ -236,8 +289,10 @@ def exam():
 
     ]
 
+    print("TOTAL QUESTIONS FOUND:", len(employee_questions))
+
     # =====================================================
-    # COMPLETED
+    # COMPLETED PAGE
     # =====================================================
 
     if employee_questions.empty:
@@ -282,6 +337,8 @@ def exam():
 
     current_question = employee_questions.iloc[0]
 
+    print("CURRENT QUESTION ID:", current_question['QuestionID'])
+
     # =====================================================
     # TAGS
     # =====================================================
@@ -310,7 +367,11 @@ def exam():
 
     if request.method == 'POST':
 
+        print("FORM DATA:", request.form)
+
         action = request.form.get('action')
+
+        print("ACTION:", action)
 
         # =================================================
         # SUBMIT
@@ -342,7 +403,11 @@ def exam():
 
             )
 
+            print("SELECTED ANSWERS:", selected_answers)
+
             if len(selected_answers) == 0:
+
+                conn.close()
 
                 return """
 
@@ -390,6 +455,8 @@ def exam():
 
             )
 
+            print("CORRECT ANSWERS:", correct_answers)
+
             # =============================================
             # STATUS
             # =============================================
@@ -400,31 +467,37 @@ def exam():
 
                 status = 'Correct'
 
+            print("STATUS:", status)
+
             # =============================================
             # QUESTION ID
             # =============================================
 
             question_id = str(
                 current_question['QuestionID']
-            )
+            ).strip()
+
+            print("QUESTION ID:", question_id)
 
             # =============================================
             # SCENARIO
             # =============================================
 
-            scenario = str(
-                current_question.get('Scenario','')
-            ).strip()
+            scenario = ''
+
+            if 'Scenario' in current_question.index:
+
+                scenario = str(
+                    current_question['Scenario']
+                ).strip()
 
             # =============================================
-            # DUPLICATE CHECK
+            # DELETE OLD ENTRY
             # =============================================
 
             cursor.execute("""
 
-                SELECT id
-
-                FROM answers
+                DELETE FROM answers
 
                 WHERE EmployeeID = ?
 
@@ -437,13 +510,13 @@ def exam():
 
             ))
 
-            already_exists = cursor.fetchone()
+            print("OLD ANSWER REMOVED")
 
             # =============================================
-            # SAVE
+            # SAVE ANSWER
             # =============================================
 
-            if already_exists is None:
+            try:
 
                 cursor.execute("""
 
@@ -483,6 +556,24 @@ def exam():
 
                 conn.commit()
 
+                print("ANSWER SAVED SUCCESSFULLY")
+
+            except Exception as e:
+
+                print("DATABASE ERROR:", e)
+
+                conn.close()
+
+                return f"""
+
+                <h2 style='color:red;text-align:center;margin-top:50px;'>
+
+                    DATABASE ERROR:<br><br>{e}
+
+                </h2>
+
+                """
+
         # =================================================
         # ESCALATE
         # =================================================
@@ -494,41 +585,51 @@ def exam():
                 ''
             ).strip()
 
+            print("ESCALATION:", explanation)
+
             if explanation != '':
 
-                cursor.execute("""
+                try:
 
-                    INSERT INTO escalations (
+                    cursor.execute("""
 
-                        EmployeeID,
+                        INSERT INTO escalations (
 
-                        QuestionID,
+                            EmployeeID,
 
-                        Scenario,
+                            QuestionID,
 
-                        Explanation,
+                            Scenario,
 
-                        Timestamp
+                            Explanation,
 
-                    )
+                            Timestamp
 
-                    VALUES (?, ?, ?, ?, ?)
+                        )
 
-                """, (
+                        VALUES (?, ?, ?, ?, ?)
 
-                    employee_id,
+                    """, (
 
-                    str(current_question['QuestionID']),
+                        employee_id,
 
-                    str(current_question['Scenario']),
+                        str(current_question['QuestionID']),
 
-                    explanation,
+                        str(current_question['Scenario']),
 
-                    str(datetime.now())
+                        explanation,
 
-                ))
+                        str(datetime.now())
 
-                conn.commit()
+                    ))
+
+                    conn.commit()
+
+                    print("ESCALATION SAVED")
+
+                except Exception as e:
+
+                    print("ESCALATION ERROR:", e)
 
         conn.close()
 
@@ -563,10 +664,6 @@ def exam():
         )
 
     conn.close()
-
-    # =====================================================
-    # RENDER
-    # =====================================================
 
     return render_template(
 
@@ -605,16 +702,10 @@ def logout():
 
 if __name__ == '__main__':
 
-    init_db()
+    print("SERVER STARTED")
 
-    print("Server starting...")
-
-    server = make_server(
-        '0.0.0.0',
-        5000,
-        app
+    app.run(
+        host='0.0.0.0',
+        port=5000,
+        debug=True
     )
-
-    print("Server running on port 5000")
-
-    server.serve_forever()
