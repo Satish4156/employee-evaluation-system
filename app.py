@@ -22,7 +22,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 QUESTIONS_FILE = os.path.join(BASE_DIR, 'questions.xlsx')
 
 DATABASE = os.path.join(BASE_DIR, 'exam.db')
+
 print("DATABASE PATH:", DATABASE)
+
 # =========================================================
 # QUESTIONS CACHE
 # =========================================================
@@ -378,8 +380,6 @@ def exam():
 
             )
 
-            print("SELECTED ANSWERS:", selected_answers)
-
             if len(selected_answers) == 0:
 
                 conn.close()
@@ -452,13 +452,9 @@ def exam():
             # SCENARIO
             # =============================================
 
-            scenario = ''
-
-            if 'Scenario' in current_question.index:
-
-                scenario = str(
-                    current_question['Scenario']
-                ).strip()
+            scenario = str(
+                current_question['Scenario']
+            ).strip()
 
             # =============================================
             # DELETE OLD ENTRY
@@ -547,127 +543,126 @@ def exam():
 
         elif action == 'escalate':
 
-         selected_answers = request.form.getlist(
-        'answers'
-    )
+            selected_answers = request.form.getlist(
+                'answers'
+            )
 
-    selected_answers = [
+            selected_answers = [
 
-        x.strip()
+                x.strip()
 
-        for x in selected_answers
+                for x in selected_answers
 
-        if x.strip()
+                if x.strip()
 
-    ]
+            ]
 
-    # BLOCK ESCALATION IF TAGS SELECTED
+            # BLOCK ESCALATION IF TAGS SELECTED
 
-    if len(selected_answers) > 0:
+            if len(selected_answers) > 0:
 
-        conn.close()
+                conn.close()
 
-        return """
+                return """
 
-        <h3 style='text-align:center;
-                   margin-top:50px;
-                   color:red;'>
+                <h3 style='text-align:center;
+                           margin-top:50px;
+                           color:red;'>
 
-            Remove Selected Tags Before Escalation
+                    Remove Selected Tags Before Escalation
 
-        </h3>
+                </h3>
 
-        """
+                """
 
-    explanation = request.form.get(
-        'explanation',
-        ''
-    ).strip()
+            explanation = request.form.get(
+                'explanation',
+                ''
+            ).strip()
 
-    if explanation != '':
+            if explanation != '':
 
-        try:
+                try:
 
-            # SAVE ESCALATION
+                    # SAVE ESCALATION
 
-            cursor.execute("""
+                    cursor.execute("""
 
-                INSERT INTO escalations (
+                        INSERT INTO escalations (
 
-                    EmployeeID,
+                            EmployeeID,
 
-                    QuestionID,
+                            QuestionID,
 
-                    Scenario,
+                            Scenario,
 
-                    Explanation,
+                            Explanation,
 
-                    Timestamp
+                            Timestamp
 
-                )
+                        )
 
-                VALUES (?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?)
 
-            """, (
+                    """, (
 
-                employee_id,
+                        employee_id,
 
-                str(current_question['QuestionID']),
+                        str(current_question['QuestionID']),
 
-                str(current_question['Scenario']),
+                        str(current_question['Scenario']),
 
-                explanation,
+                        explanation,
 
-                str(datetime.now())
+                        str(datetime.now())
 
-            ))
+                    ))
 
-            # MARK QUESTION COMPLETED
+                    # MARK QUESTION COMPLETED
 
-            cursor.execute("""
+                    cursor.execute("""
 
-                INSERT INTO answers (
+                        INSERT INTO answers (
 
-                    EmployeeID,
+                            EmployeeID,
 
-                    QuestionID,
+                            QuestionID,
 
-                    Scenario,
+                            Scenario,
 
-                    Answers,
+                            Answers,
 
-                    Status,
+                            Status,
 
-                    Timestamp
+                            Timestamp
 
-                )
+                        )
 
-                VALUES (?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?)
 
-            """, (
+                    """, (
 
-                employee_id,
+                        employee_id,
 
-                str(current_question['QuestionID']),
+                        str(current_question['QuestionID']),
 
-                str(current_question['Scenario']),
+                        str(current_question['Scenario']),
 
-                'ESCALATED',
+                        'ESCALATED',
 
-                'Escalated',
+                        'Escalated',
 
-                str(datetime.now())
+                        str(datetime.now())
 
-            ))
+                    ))
 
-            conn.commit()
+                    conn.commit()
 
-            print("ESCALATION SAVED")
+                    print("ESCALATION SAVED")
 
-        except Exception as e:
+                except Exception as e:
 
-            print("ESCALATION ERROR:", e)
-            
+                    print("ESCALATION ERROR:", e)
 
         conn.close()
 
