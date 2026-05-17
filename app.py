@@ -96,9 +96,10 @@ def init_db():
 
             Timestamp TEXT
 
-        )
+           )
 
-    """)
+
+                             """)
 
     conn.commit()
 
@@ -252,7 +253,9 @@ def exam():
 
         for row in cursor.fetchall()
 
-    )
+     )
+    
+
 
     # =====================================================
     # FILTER QUESTIONS
@@ -296,14 +299,15 @@ def exam():
         cursor.execute("""
 
             SELECT COUNT(*)
-
+ 
+                       
             FROM answers
 
             WHERE EmployeeID = ?
 
             AND Status = 'Correct'
 
-        """, (employee_id,))
+        """), (employee_id,)
 
         total_correct = cursor.fetchone()[0]
 
@@ -469,7 +473,7 @@ def exam():
 
                 AND QuestionID = ?
 
-            """, (
+            """), (
 
                 employee_id,
                 question_id
@@ -502,7 +506,7 @@ def exam():
 
                     VALUES (?, ?, ?, ?, ?, ?)
 
-                """, (
+                """), (
 
                     employee_id,
 
@@ -641,7 +645,7 @@ def exam():
 
                         VALUES (?, ?, ?, ?, ?, ?)
 
-                    """, (
+                    """), (
 
                         employee_id,
 
