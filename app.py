@@ -526,8 +526,6 @@ def exam():
 
                         QuestionID,
 
-                        Scenario,
-
                         Answers,
 
                         Status,
@@ -544,7 +542,6 @@ def exam():
 
                     question_id,
 
-                    scenario,
 
                     ', '.join(selected_answers),
 
