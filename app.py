@@ -4,6 +4,7 @@ from datetime import datetime
 import sqlite3
 import secrets
 import os
+from wsgiref.simple_server import make_server
 
 # =========================================================
 # APP
@@ -21,9 +22,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 QUESTIONS_FILE = os.path.join(BASE_DIR, 'questions.xlsx')
 
 DATABASE = os.path.join(BASE_DIR, 'exam.db')
-
 print("DATABASE PATH:", DATABASE)
-
 # =========================================================
 # QUESTIONS CACHE
 # =========================================================
@@ -56,8 +55,6 @@ def init_db():
 
     cursor = conn.cursor()
 
-    # ANSWERS TABLE
-
     cursor.execute("""
 
         CREATE TABLE IF NOT EXISTS answers (
@@ -67,6 +64,8 @@ def init_db():
             EmployeeID TEXT,
 
             QuestionID TEXT,
+
+            Scenario TEXT,
 
             Answers TEXT,
 
@@ -78,8 +77,6 @@ def init_db():
 
     """)
 
-    # ESCALATIONS TABLE
-
     cursor.execute("""
 
         CREATE TABLE IF NOT EXISTS escalations (
@@ -89,6 +86,8 @@ def init_db():
             EmployeeID TEXT,
 
             QuestionID TEXT,
+
+            Scenario TEXT,
 
             Explanation TEXT,
 
@@ -120,9 +119,7 @@ def login():
         employee_id = request.form.get(
             'employee_id',
             ''
-        ).strip().lower()
-
-        print("LOGIN EMPLOYEE ID:", employee_id)
+        ).strip()
 
         if employee_id == '':
 
@@ -167,15 +164,11 @@ def exam():
                 engine='openpyxl'
             ).fillna('')
 
-            print("QUESTIONS FILE LOADED")
-
         except Exception as e:
 
             return f"""
 
-            <h2 style='color:red;
-                       text-align:center;
-                       margin-top:50px;'>
+            <h2 style='color:red;text-align:center;margin-top:50px;'>
 
                 Excel Loading Error:<br><br>{e}
 
@@ -204,13 +197,10 @@ def exam():
 
                 questions_df[col] = ''
 
-        # CLEAN DATA
-
         questions_df['EmployeeID'] = (
             questions_df['EmployeeID']
             .astype(str)
             .str.strip()
-            .str.lower()
         )
 
         questions_df['QuestionID'] = (
@@ -225,9 +215,6 @@ def exam():
             .str.strip()
         )
 
-        print("AVAILABLE EMPLOYEE IDS:")
-        print(questions_df['EmployeeID'].unique())
-
     # =====================================================
     # SESSION CHECK
     # =====================================================
@@ -236,13 +223,7 @@ def exam():
 
         return redirect(url_for('login'))
 
-    employee_id = (
-        str(session['employee_id'])
-        .strip()
-        .lower()
-    )
-
-    print("CURRENT EMPLOYEE:", employee_id)
+    employee_id = session['employee_id']
 
     conn = get_db()
 
@@ -270,8 +251,6 @@ def exam():
 
     )
 
-    print("COMPLETED IDS:", completed_ids)
-
     # =====================================================
     # FILTER QUESTIONS
     # =====================================================
@@ -292,8 +271,6 @@ def exam():
         )
 
     ]
-
-    print("TOTAL QUESTIONS FOUND:", len(employee_questions))
 
     # =====================================================
     # COMPLETED PAGE
@@ -341,9 +318,6 @@ def exam():
 
     current_question = employee_questions.iloc[0]
 
-    print("CURRENT QUESTION ID:",
-          current_question['QuestionID'])
-
     # =====================================================
     # TAGS
     # =====================================================
@@ -372,11 +346,7 @@ def exam():
 
     if request.method == 'POST':
 
-        print("FORM DATA:", request.form)
-
         action = request.form.get('action')
-
-        print("ACTION:", action)
 
         # =================================================
         # SUBMIT
@@ -384,9 +354,7 @@ def exam():
 
         if action == 'submit':
 
-            selected_answers = request.form.getlist(
-                'answers'
-            )
+            selected_answers = request.form.getlist('answers')
 
             selected_answers = sorted(
 
@@ -410,8 +378,7 @@ def exam():
 
             )
 
-            print("SELECTED ANSWERS:",
-                  selected_answers)
+            print("SELECTED ANSWERS:", selected_answers)
 
             if len(selected_answers) == 0:
 
@@ -463,9 +430,6 @@ def exam():
 
             )
 
-            print("CORRECT ANSWERS:",
-                  correct_answers)
-
             # =============================================
             # STATUS
             # =============================================
@@ -476,8 +440,6 @@ def exam():
 
                 status = 'Correct'
 
-            print("STATUS:", status)
-
             # =============================================
             # QUESTION ID
             # =============================================
@@ -486,7 +448,17 @@ def exam():
                 current_question['QuestionID']
             ).strip()
 
-            print("QUESTION ID:", question_id)
+            # =============================================
+            # SCENARIO
+            # =============================================
+
+            scenario = ''
+
+            if 'Scenario' in current_question.index:
+
+                scenario = str(
+                    current_question['Scenario']
+                ).strip()
 
             # =============================================
             # DELETE OLD ENTRY
@@ -507,8 +479,6 @@ def exam():
 
             ))
 
-            print("OLD ANSWER REMOVED")
-
             # =============================================
             # SAVE ANSWER
             # =============================================
@@ -523,6 +493,8 @@ def exam():
 
                         QuestionID,
 
+                        Scenario,
+
                         Answers,
 
                         Status,
@@ -531,13 +503,15 @@ def exam():
 
                     )
 
-                    VALUES (?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?)
 
                 """, (
 
                     employee_id,
 
                     question_id,
+
+                    scenario,
 
                     ', '.join(selected_answers),
 
@@ -559,9 +533,7 @@ def exam():
 
                 return f"""
 
-                <h2 style='color:red;
-                           text-align:center;
-                           margin-top:50px;'>
+                <h2 style='color:red;text-align:center;margin-top:50px;'>
 
                     DATABASE ERROR:<br><br>{e}
 
@@ -575,52 +547,127 @@ def exam():
 
         elif action == 'escalate':
 
-            explanation = request.form.get(
-                'explanation',
-                ''
-            ).strip()
+         selected_answers = request.form.getlist(
+        'answers'
+    )
 
-            print("ESCALATION:", explanation)
+    selected_answers = [
 
-            if explanation != '':
+        x.strip()
 
-                try:
+        for x in selected_answers
 
-                    cursor.execute("""
+        if x.strip()
 
-                        INSERT INTO escalations (
+    ]
 
-                            EmployeeID,
+    # BLOCK ESCALATION IF TAGS SELECTED
 
-                            QuestionID,
+    if len(selected_answers) > 0:
 
-                            Explanation,
+        conn.close()
 
-                            Timestamp
+        return """
 
-                        )
+        <h3 style='text-align:center;
+                   margin-top:50px;
+                   color:red;'>
 
-                        VALUES (?, ?, ?, ?)
+            Remove Selected Tags Before Escalation
 
-                    """, (
+        </h3>
 
-                        employee_id,
+        """
 
-                        str(current_question['QuestionID']),
+    explanation = request.form.get(
+        'explanation',
+        ''
+    ).strip()
 
-                        explanation,
+    if explanation != '':
 
-                        str(datetime.now())
+        try:
 
-                    ))
+            # SAVE ESCALATION
 
-                    conn.commit()
+            cursor.execute("""
 
-                    print("ESCALATION SAVED")
+                INSERT INTO escalations (
 
-                except Exception as e:
+                    EmployeeID,
 
-                    print("ESCALATION ERROR:", e)
+                    QuestionID,
+
+                    Scenario,
+
+                    Explanation,
+
+                    Timestamp
+
+                )
+
+                VALUES (?, ?, ?, ?, ?)
+
+            """, (
+
+                employee_id,
+
+                str(current_question['QuestionID']),
+
+                str(current_question['Scenario']),
+
+                explanation,
+
+                str(datetime.now())
+
+            ))
+
+            # MARK QUESTION COMPLETED
+
+            cursor.execute("""
+
+                INSERT INTO answers (
+
+                    EmployeeID,
+
+                    QuestionID,
+
+                    Scenario,
+
+                    Answers,
+
+                    Status,
+
+                    Timestamp
+
+                )
+
+                VALUES (?, ?, ?, ?, ?, ?)
+
+            """, (
+
+                employee_id,
+
+                str(current_question['QuestionID']),
+
+                str(current_question['Scenario']),
+
+                'ESCALATED',
+
+                'Escalated',
+
+                str(datetime.now())
+
+            ))
+
+            conn.commit()
+
+            print("ESCALATION SAVED")
+
+        except Exception as e:
+
+            print("ESCALATION ERROR:", e)
+            
 
         conn.close()
 
@@ -693,10 +740,12 @@ def logout():
 
 if __name__ == '__main__':
 
+    server = make_server(
+        '0.0.0.0',
+        5000,
+        app
+    )
+
     print("SERVER STARTED")
 
-    app.run(
-        host='0.0.0.0',
-        port=5000,
-        debug=True
-    )
+    server.serve_forever()
