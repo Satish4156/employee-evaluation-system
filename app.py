@@ -56,6 +56,8 @@ def init_db():
 
     cursor = conn.cursor()
 
+    # ANSWERS TABLE
+
     cursor.execute("""
 
         CREATE TABLE IF NOT EXISTS answers (
@@ -65,8 +67,6 @@ def init_db():
             EmployeeID TEXT,
 
             QuestionID TEXT,
-
-            Scenario TEXT,
 
             Answers TEXT,
 
@@ -78,6 +78,8 @@ def init_db():
 
     """)
 
+    # ESCALATIONS TABLE
+
     cursor.execute("""
 
         CREATE TABLE IF NOT EXISTS escalations (
@@ -87,8 +89,6 @@ def init_db():
             EmployeeID TEXT,
 
             QuestionID TEXT,
-
-            Scenario TEXT,
 
             Explanation TEXT,
 
@@ -173,7 +173,9 @@ def exam():
 
             return f"""
 
-            <h2 style='color:red;text-align:center;margin-top:50px;'>
+            <h2 style='color:red;
+                       text-align:center;
+                       margin-top:50px;'>
 
                 Excel Loading Error:<br><br>{e}
 
@@ -201,6 +203,8 @@ def exam():
             if col not in questions_df.columns:
 
                 questions_df[col] = ''
+
+        # CLEAN DATA
 
         questions_df['EmployeeID'] = (
             questions_df['EmployeeID']
@@ -337,7 +341,8 @@ def exam():
 
     current_question = employee_questions.iloc[0]
 
-    print("CURRENT QUESTION ID:", current_question['QuestionID'])
+    print("CURRENT QUESTION ID:",
+          current_question['QuestionID'])
 
     # =====================================================
     # TAGS
@@ -379,7 +384,9 @@ def exam():
 
         if action == 'submit':
 
-            selected_answers = request.form.getlist('answers')
+            selected_answers = request.form.getlist(
+                'answers'
+            )
 
             selected_answers = sorted(
 
@@ -403,7 +410,8 @@ def exam():
 
             )
 
-            print("SELECTED ANSWERS:", selected_answers)
+            print("SELECTED ANSWERS:",
+                  selected_answers)
 
             if len(selected_answers) == 0:
 
@@ -455,7 +463,8 @@ def exam():
 
             )
 
-            print("CORRECT ANSWERS:", correct_answers)
+            print("CORRECT ANSWERS:",
+                  correct_answers)
 
             # =============================================
             # STATUS
@@ -478,18 +487,6 @@ def exam():
             ).strip()
 
             print("QUESTION ID:", question_id)
-
-            # =============================================
-            # SCENARIO
-            # =============================================
-
-            scenario = ''
-
-            if 'Scenario' in current_question.index:
-
-                scenario = str(
-                    current_question['Scenario']
-                ).strip()
 
             # =============================================
             # DELETE OLD ENTRY
@@ -534,14 +531,13 @@ def exam():
 
                     )
 
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?)
 
                 """, (
 
                     employee_id,
 
                     question_id,
-
 
                     ', '.join(selected_answers),
 
@@ -563,7 +559,9 @@ def exam():
 
                 return f"""
 
-                <h2 style='color:red;text-align:center;margin-top:50px;'>
+                <h2 style='color:red;
+                           text-align:center;
+                           margin-top:50px;'>
 
                     DATABASE ERROR:<br><br>{e}
 
@@ -596,23 +594,19 @@ def exam():
 
                             QuestionID,
 
-                            Scenario,
-
                             Explanation,
 
                             Timestamp
 
                         )
 
-                        VALUES (?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?)
 
                     """, (
 
                         employee_id,
 
                         str(current_question['QuestionID']),
-
-                        str(current_question['Scenario']),
 
                         explanation,
 
