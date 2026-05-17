@@ -1,0 +1,260 @@
+# Admin Dashboard Feature — Copy Paste Code
+
+Add this FULL code inside your existing `app.py`
+
+---
+
+# =========================================================
+
+# ADMIN DASHBOARD
+
+# =========================================================
+
+@app.route('/admin')
+def admin_dashboard():
+
+```
+conn = get_db()
+
+cursor = conn.cursor()
+
+# =============================================
+# TOTAL SUBMISSIONS
+# =============================================
+
+cursor.execute("""
+
+    SELECT COUNT(*)
+
+    FROM answers
+
+""")
+
+total_submissions = cursor.fetchone()[0]
+
+# =============================================
+# TOTAL ESCALATIONS
+# =============================================
+
+cursor.execute("""
+
+    SELECT COUNT(*)
+
+    FROM escalations
+
+""")
+
+total_escalations = cursor.fetchone()[0]
+
+# =============================================
+# EMPLOYEE PERFORMANCE
+# =============================================
+
+cursor.execute("""
+
+    SELECT
+
+        EmployeeID,
+
+        COUNT(*) as total_completed
+
+    FROM answers
+
+    GROUP BY EmployeeID
+
+    ORDER BY total_completed DESC
+
+""")
+
+employee_stats = cursor.fetchall()
+
+# =============================================
+# RECENT SUBMISSIONS
+# =============================================
+
+cursor.execute("""
+
+    SELECT *
+
+    FROM answers
+
+    ORDER BY id DESC
+
+    LIMIT 20
+
+""")
+
+recent_answers = cursor.fetchall()
+
+conn.close()
+
+return render_template(
+
+    'admin.html',
+
+    total_submissions=total_submissions,
+
+    total_escalations=total_escalations,
+
+    employee_stats=employee_stats,
+
+    recent_answers=recent_answers
+
+)
+```
+
+---
+
+Create new file:
+
+`templates/admin.html`
+
+Paste this FULL code:
+
+```html
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>Admin Dashboard</title>
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+</head>
+
+<body style="background:#f5f5f5;">
+
+<div class="container mt-4">
+
+    <h1 class="mb-4">
+        Admin Dashboard
+    </h1>
+
+    <div class="row mb-4">
+
+        <div class="col-md-6">
+
+            <div class="card p-4 shadow-sm">
+
+                <h3>Total Submissions</h3>
+
+                <h1>
+                    {{ total_submissions }}
+                </h1>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6">
+
+            <div class="card p-4 shadow-sm">
+
+                <h3>Total Escalations</h3>
+
+                <h1>
+                    {{ total_escalations }}
+                </h1>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="card p-4 shadow-sm mb-4">
+
+        <h3 class="mb-3">
+            Employee Performance
+        </h3>
+
+        <table class="table table-bordered">
+
+            <thead>
+
+                <tr>
+
+                    <th>Employee ID</th>
+
+                    <th>Completed Tasks</th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                {% for emp in employee_stats %}
+
+                <tr>
+
+                    <td>{{ emp.EmployeeID }}</td>
+
+                    <td>{{ emp.total_completed }}</td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+    <div class="card p-4 shadow-sm">
+
+        <h3 class="mb-3">
+            Recent Submissions
+        </h3>
+
+        <table class="table table-bordered table-striped">
+
+            <thead>
+
+                <tr>
+
+                    <th>Employee</th>
+
+                    <th>Question ID</th>
+
+                    <th>Status</th>
+
+                    <th>Timestamp</th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                {% for row in recent_answers %}
+
+                <tr>
+
+                    <td>{{ row.EmployeeID }}</td>
+
+                    <td>{{ row.QuestionID }}</td>
+
+                    <td>{{ row.Status }}</td>
+
+                    <td>{{ row.Timestamp }}</td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+</body>
+</html>

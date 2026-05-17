@@ -75,9 +75,10 @@ def init_db():
 
             Timestamp TEXT
 
-        )
 
-    """)
+                   
+  
+                          """)
 
     cursor.execute("""
 
@@ -664,6 +665,7 @@ def exam():
 
                     print("ESCALATION ERROR:", e)
 
+
         conn.close()
 
         return redirect(url_for('exam'))
@@ -716,6 +718,70 @@ def exam():
 
         progress_percent=progress_percent
 
+    )
+# Admin Dashboard Feature — Copy Paste Code
+
+# =========================================================
+
+# ADMIN DASHBOARD
+
+# =========================================================
+
+@app.route('/admin')
+def admin_dashboard():
+    conn = get_db()
+
+    cursor = conn.cursor()
+    # =============================================
+    # TOTAL SUBMISSIONS
+    # =============================================
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM answers
+    """)
+    total_submissions = cursor.fetchone()[0]
+
+    # =============================================
+    # TOTAL ESCALATIONS
+    # =============================================
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM escalations
+    """)
+    total_escalations = cursor.fetchone()[0]
+
+    # =============================================
+    # EMPLOYEE PERFORMANCE
+    # =============================================
+    cursor.execute("""
+        SELECT
+            EmployeeID,
+            COUNT(*) as total_completed
+        FROM answers
+        GROUP BY EmployeeID
+        ORDER BY total_completed DESC
+    """)
+    employee_stats = cursor.fetchall()
+
+    # =============================================
+    # RECENT SUBMISSIONS
+    # =============================================
+    cursor.execute("""
+        SELECT *
+        FROM answers
+        ORDER BY id DESC
+        LIMIT 20
+    """)
+    recent_answers = cursor.fetchall()
+
+    conn.close()
+
+    return render_template(
+        'admin.html',
+        total_submissions=total_submissions,
+        total_escalations=total_escalations,
+        employee_stats=employee_stats,
+        recent_answers=recent_answers
     )
 
 # =========================================================
